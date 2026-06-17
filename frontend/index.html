@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Holdfast // Historical Tactical Mapping Engine</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" 
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" 
+          crossorigin=""/>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <header>
+        <h2>HOLDFAST // THEATER COMMAND ENGINE</h2>
+    </header>
+
+    <div id="app-container">
+        <div id="sidebar">
+            <h3>THEATER SELECTION</h3>
+            <select id="campaign-select" style="width: 100%; padding: 10px; background-color: #333; color: white; border: 1px solid #555; border-radius: 4px; font-family: monospace; cursor: pointer;">
+                <option value="">-- Select Active Campaign --</option>
+            </select>
+            <button id="load-campaign-btn" style="width: 100%; margin-top: 10px;">ENGAGE OPERATIONS</button>
+
+            <hr style="border: 1px solid #333; margin: 15px 0;">
+
+            <h3>TARGET ACQUISITION</h3>
+            <div class="search-box">
+                <input type="text" id="location-input" placeholder="e.g., Rhine River, Germany">
+                <button id="search-btn">FLY TO</button>
+        </div>
+    
+    <hr style="border: 1px solid #333; margin: 15px 0;">
+    
+    <div id="timeline-controls">
+        <h3>TIMELINE CHRONOLOGY</h3>
+        <p style="color: #888; font-style: italic;">No active campaign file loaded into command scope.</p>
+    </div>
+</div>
+    
+    <hr style="border: 1px solid #333; margin: 15px 0;">
+    
+    <div id="timeline-controls">
+        <h3>TIMELINE CHRONOLOGY</h3>
+        <p style="color: #888; font-style: italic;">No active campaign file loaded into command scope.</p>
+    </div>
+</div>
+
+        <div id="map-canvas"></div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" 
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" 
+            crossorigin=""></script>
+            
+    <script src="app.js"></script>
+</body>
+</html>
