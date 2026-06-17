@@ -30,9 +30,9 @@ const MarkerSchema = new mongoose.Schema({
         min: 0,
         default: 0
     },
-    amooStatus: {
+    ammoStatus: {
         type: String,
-        enum: ['Full', 'Operational', 'Critical', 'Empty'],
+        enum: ['Full', 'Operational', 'Critical', 'Depleted'],
         default: 'Full'
     },
     description: {
@@ -65,7 +65,7 @@ const CampaignMapSchema = new mongoose.Schema({
     title: {
         type: String,
         required: [true, 'Campaign title is required'],
-        trim: true
+        trim: true,
         unique: true
     },
     description: {
@@ -80,7 +80,7 @@ const CampaignMapSchema = new mongoose.Schema({
         type: Number,
         required: true
     },
-    DefaultZoomLevel: {
+    defaultZoomLevel: {
         type: Number,
         default: 10
     },
