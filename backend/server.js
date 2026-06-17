@@ -3,6 +3,8 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const mongoose = require('mongoose');
 
+const mapRoutes = require('./routes/maps');
+
 dotenv.config();
 
 const app = express();
@@ -16,6 +18,8 @@ mongoose.connect(process.env.MONGO_URI)
     console.error('[DATABASE ERROR]: Connection sequence failed!');
     console.error(err);
 });
+
+app.use('/api/maps', mapRoutes);
 
 app.get('/', (req, res) => {
     res.json({ message: "Welcome to Holdfast Backend Engine. Standing fast!" });
