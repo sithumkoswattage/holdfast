@@ -1,127 +1,231 @@
-// Initialize the Leaflet map element targeting our explicit #map-canvas container
-// [Latitude, Longitude], Zoom Level (51.505, -0.09 is just a safe European tactical baseline default)
-const map = L.map('map-canvas').setView([51.505, -0.09], 5);
+// Initialize Leaflet Map
+const map = L.map('map-canvas', {
+    zoomControl: false // Cleans up the canvas for our custom HUD
+}).setView([51.505, -0.09], 5);
 
-// Load and inject the OpenStreetMap cartographic tile configuration layout
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+// Re-position zoom controls to top-right
+L.control.zoom({ position: 'topright' }).addTo(map);
+
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
+    attribution: 'Tiles &copy; Esri'
 }).addTo(map);
 
-console.log('[FRONTEND CANVAS]: Leaflet global map projection initialized successfully.');
+// State Management
+const API_BASE_URL = 'http://localhost:5000/api/maps';
+let currentCampaign = null;
+let currentStageIndex = 0;
+let markerLayerGroup = L.layerGroup().addTo(map);
+let playbackInterval = null;
 
-// Target DOM nodes for operation hookups
-const searchBtn = document.getElementById('search-btn');
+// DOM Target References
+const campaignSelect = document.getElementById('campaign-select');
+const loadCampaignBtn = document.getElementById('load-campaign-btn');
 const locationInput = document.getElementById('location-input');
+const searchBtn = document.getElementById('search-btn');
 
-// Event listener for our global geocoding command string hookup
+const timelineSlider = document.getElementById('timeline-slider');
+const deckStageName = document.getElementById('deck-stage-name');
+const stageTitle = document.getElementById('stage-title');
+const stageSummary = document.getElementById('stage-summary');
+const countAttacker = document.getElementById('count-attacker');
+const countDefender = document.getElementById('count-defender');
+const countNeutral = document.getElementById('count-neutral');
+const opStateBanner = document.getElementById('op-state-banner');
+
+const prevBtn = document.getElementById('prev-btn');
+const playBtn = document.getElementById('play-btn');
+const nextBtn = document.getElementById('next-btn');
+const speedSelect = document.getElementById('playback-speed');
+
+// 1. Geocoding
 searchBtn.addEventListener('click', async () => {
     const query = locationInput.value.trim();
     if (!query) return;
 
-    console.log(`[GEO TARGETING]: Resolving coordinates string for: "${query}"`);
-    
     try {
-        // Core workflow step 2: Free open-source geocoding using the Nominatim OpenStreetMap API engine
-        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`);
-        const data = await response.json();
-
-        if (data && data.length > 0) {
-            const topResult = data[0];
-            // Extract decimal floats out of the string elements returned by Nominatim
-            const targetLat = parseFloat(topResult.lat);
-            const targetLon = parseFloat(topResult.lon);
-
-            console.log(`[GEO TARGET KEY]: Found match! Coordinates: Lat ${targetLat}, Lon ${targetLon}`);
-            
-            // Fly the map camera view over to our resolved geographical target frame instantly
-            map.flyTo([targetLat, targetLon], 12, {
-                animate: true,
-                duration: 1.5 // Execution camera slide time tracking window in seconds
-            });
-
-            // Drop an immediate marker beacon placeholder to confirm target center anchor point
-            L.marker([targetLat, targetLon])
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`);
+        const data = await res.json();
+        if (data.length > 0) {
+            const { lat, lon, display_name } = data[0];
+            map.flyTo([parseFloat(lat), parseFloat(lon)], 12, { animate: true, duration: 1.5 });
+            L.marker([parseFloat(lat), parseFloat(lon)])
                 .addTo(map)
-                .bindPopup(`<b>Target Frame Anchor</b><br>${topResult.display_name}`)
+                .bindPopup(`<b>Anchor Target</b><br>${display_name}`)
                 .openPopup();
-        } else {
-            alert('[GEO TARGET ERROR]: No global coordinates matched that string query format.');
         }
     } catch (err) {
-        console.error('[GEO NETWORK ERROR]: Failed to reach public Geocoding pipeline cluster:', err);
+        console.error('[GEO ERROR]:', err);
     }
 });
 
-// Configuration: Point this to your local backend engine instance
-const API_BASE_URL = 'http://localhost:5000/api/maps';
-
-// Target the new DOM elements
-const campaignSelect = document.getElementById('campaign-select');
-const loadCampaignBtn = document.getElementById('load-campaign-btn');
-
-/**
- * PHASE 1: Fetch all campaign summaries to populate the dropdown menu on page boot
- */
+// 2. Load Campaigns into Dropdown
 async function loadCampaignDropdown() {
     try {
-        console.log('[API FETCH]: Querying available campaigns list...');
-        const response = await fetch(API_BASE_URL);
-        const campaigns = await response.json();
-
-        // Populate the select element options using our lightweight database payload
-        campaigns.forEach(campaign => {
-            const option = document.createElement('option');
-            option.value = campaign._id; // Use the MongoDB ObjectId string as the value reference
-            option.textContent = campaign.title;
-            campaignSelect.appendChild(option);
+        const res = await fetch(API_BASE_URL);
+        const campaigns = await res.json();
+        campaigns.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c._id;
+            opt.textContent = c.title;
+            campaignSelect.appendChild(opt);
         });
-        
-        console.log(`[API SUCCESS]: Loaded ${campaigns.length} campaigns into selection inventory.`);
     } catch (err) {
-        console.error('[FETCH ERROR]: Failed to pull campaign dashboard records:', err);
+        console.error('[FETCH ERROR]:', err);
     }
 }
 
-/**
- * PHASE 2: Fetch full deep-nested data for a selected campaign layout and focus map view
- */
+// 3. Load Selected Campaign Map & Stages
 loadCampaignBtn.addEventListener('click', async () => {
-    const selectedId = campaignSelect.value;
-    if (!selectedId) {
-        alert('Please select an active operation theater from the menu.');
-        return;
-    }
+    const id = campaignSelect.value;
+    if (!id) return;
 
-    console.log(`[API FETCH]: Pulling full strategic layouts for Campaign ID: ${selectedId}`);
+    stopPlayback();
 
     try {
-        // Execute a precise individual ID lookup on our backend router
-        const response = await fetch(`${API_BASE_URL}/${selectedId}`);
-        const campaign = await response.json();
+        const res = await fetch(`${API_BASE_URL}/${id}`);
+        currentCampaign = await res.json();
 
-        if (campaign) {
-            console.log('[FETCH SUCCESS]: Ingested full tactical matrix:', campaign);
+        opStateBanner.textContent = `THEATER: ${currentCampaign.title.toUpperCase()}`;
 
-            // Fly the map canvas view over to the operational theater anchor point specified in DB
-            map.flyTo([campaign.centerLatitude, campaign.centerLongitude], campaign.defaultZoomLevel || 10, {
-                animate: true,
-                duration: 2.0
-            });
+        // Move camera to center defined in campaign document
+        map.flyTo(
+            [currentCampaign.centerLatitude, currentCampaign.centerLongitude],
+            currentCampaign.defaultZoomLevel || 10,
+            { animate: true, duration: 1.8 }
+        );
 
-            // Update Timeline Section text container to indicate loading was successful
-            const timelineControls = document.getElementById('timeline-controls');
-            timelineControls.innerHTML = `
-                <h3>TIMELINE CHRONOLOGY</h3>
-                <h4 style="color: #4a5d4e; margin-top: 5px;">${campaign.title}</h4>
-                <p style="font-size: 12px; margin-top: 5px; color: #aaa;">${campaign.description}</p>
-                <p style="font-size: 11px; margin-top: 10px; color: #888;">Stages detected: ${campaign.stages ? campaign.stages.length : 0}</p>
-            `;
+        // Configure Timeline Slider
+        const stagesCount = currentCampaign.stages ? currentCampaign.stages.length : 0;
+        if (stagesCount > 0) {
+            timelineSlider.min = 0;
+            timelineSlider.max = stagesCount - 1;
+            timelineSlider.value = 0;
+            timelineSlider.disabled = false;
+            currentStageIndex = 0;
+            renderStage(0);
+        } else {
+            timelineSlider.disabled = true;
+            deckStageName.textContent = 'NO STAGES AVAILABLE';
         }
     } catch (err) {
-        console.error('[FETCH ERROR]: Operational tactical loading sequence failed:', err);
+        console.error('[LOAD ERROR]:', err);
     }
 });
 
-// Fire off the dropdown population instantly when the script initializes
+// 4. Render Stage onto Leaflet Canvas
+function renderStage(index) {
+    if (!currentCampaign || !currentCampaign.stages || !currentCampaign.stages[index]) return;
+
+    const stage = currentCampaign.stages[index];
+    currentStageIndex = index;
+    timelineSlider.value = index;
+
+    // Update Sidebar & Deck Text
+    stageTitle.textContent = stage.title;
+    stageSummary.textContent = stage.historicalSummary;
+    deckStageName.textContent = `[${index + 1}/${currentCampaign.stages.length}] ${stage.title}`;
+
+    // Clear previous stage markers
+    markerLayerGroup.clearLayers();
+
+    let counts = { Attacker: 0, Defender: 0, Neutral: 0 };
+
+    // Paint Simultaneous Markers
+    if (stage.troopMarkers && stage.troopMarkers.length > 0) {
+        stage.troopMarkers.forEach(unit => {
+            counts[unit.faction] = (counts[unit.faction] || 0) + 1;
+
+            // Note: MongoDB GeoJSON coordinates format is [longitude, latitude]
+            const [lng, lat] = unit.location.coordinates;
+
+            const factionClass = unit.faction ? unit.faction.toLowerCase() : 'neutral';
+
+            // Custom Leaflet DivIcon matching tactical HUD style
+            const tacticalIcon = L.divIcon({
+                className: `tactical-marker ${factionClass}`,
+                html: `<span>${unit.label.substring(0, 3).toUpperCase()}</span>`,
+                iconSize: [32, 24],
+                iconAnchor: [16, 12]
+            });
+
+            const marker = L.marker([lat, lng], { icon: tacticalIcon });
+            
+            marker.bindPopup(`
+                <div style="font-family: monospace; font-size: 11px;">
+                    <b style="color: #22c55e;">${unit.label}</b><br>
+                    <b>Faction:</b> ${unit.faction}<br>
+                    <b>Troop Strength:</b> ${unit.troopStrength.toLocaleString()}<br>
+                    <b>Ammunition:</b> ${unit.ammoStatus}<br>
+                    ${unit.description ? `<p style="margin-top: 4px; color: #555;">${unit.description}</p>` : ''}
+                </div>
+            `);
+
+            markerLayerGroup.addLayer(marker);
+        });
+    }
+
+    countAttacker.textContent = counts.Attacker;
+    countDefender.textContent = counts.Defender;
+    countNeutral.textContent = counts.Neutral;
+}
+
+// 5. Timeline Scrubbing & Player Controls
+timelineSlider.addEventListener('input', (e) => {
+    stopPlayback();
+    renderStage(parseInt(e.target.value, 10));
+});
+
+prevBtn.addEventListener('click', () => {
+    stopPlayback();
+    if (currentStageIndex > 0) {
+        renderStage(currentStageIndex - 1);
+    }
+});
+
+nextBtn.addEventListener('click', () => {
+    stopPlayback();
+    if (currentCampaign && currentStageIndex < currentCampaign.stages.length - 1) {
+        renderStage(currentStageIndex + 1);
+    }
+});
+
+playBtn.addEventListener('click', () => {
+    if (playbackInterval) {
+        stopPlayback();
+    } else {
+        startPlayback();
+    }
+});
+
+function startPlayback() {
+    if (!currentCampaign || !currentCampaign.stages || currentCampaign.stages.length <= 1) return;
+
+    playBtn.textContent = '⏸ PAUSE';
+    const speed = parseInt(speedSelect.value, 10);
+
+    playbackInterval = setInterval(() => {
+        if (currentStageIndex < currentCampaign.stages.length - 1) {
+            renderStage(currentStageIndex + 1);
+        } else {
+            renderStage(0); // Loop back to starting stage
+        }
+    }, speed);
+}
+
+function stopPlayback() {
+    if (playbackInterval) {
+        clearInterval(playbackInterval);
+        playbackInterval = null;
+        playBtn.textContent = '▶ PLAY';
+    }
+}
+
+speedSelect.addEventListener('change', () => {
+    if (playbackInterval) {
+        stopPlayback();
+        startPlayback();
+    }
+});
+
+// Initialize
 loadCampaignDropdown();

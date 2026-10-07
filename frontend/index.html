@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Holdfast // Historical Tactical Mapping Engine</title>
+    <title>Holdfast // Tactical Command Engine</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" 
           integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" 
@@ -13,48 +13,80 @@
 <body>
 
     <header>
-        <h2>HOLDFAST // THEATER COMMAND ENGINE</h2>
+        <div class="header-left">
+            <span class="status-dot"></span>
+            <h2>HOLDFAST // THEATER COMMAND</h2>
+        </div>
+        <div id="op-state-banner">THEATER: STANDBY</div>
     </header>
 
     <div id="app-container">
+        <!-- Sidebar Controls -->
         <div id="sidebar">
-            <h3>THEATER SELECTION</h3>
-            <select id="campaign-select" style="width: 100%; padding: 10px; background-color: #333; color: white; border: 1px solid #555; border-radius: 4px; font-family: monospace; cursor: pointer;">
-                <option value="">-- Select Active Campaign --</option>
-            </select>
-            <button id="load-campaign-btn" style="width: 100%; margin-top: 10px;">ENGAGE OPERATIONS</button>
+            <div class="panel-section">
+                <h3>THEATER SELECTION</h3>
+                <select id="campaign-select">
+                    <option value="">-- Select Active Campaign --</option>
+                </select>
+                <button id="load-campaign-btn">ENGAGE OPERATIONS</button>
+            </div>
 
-            <hr style="border: 1px solid #333; margin: 15px 0;">
+            <div class="panel-section">
+                <h3>TARGET ACQUISITION</h3>
+                <div class="search-box">
+                    <input type="text" id="location-input" placeholder="e.g., Arnhem, Netherlands">
+                    <button id="search-btn">FLY TO</button>
+                </div>
+            </div>
 
-            <h3>TARGET ACQUISITION</h3>
-            <div class="search-box">
-                <input type="text" id="location-input" placeholder="e.g., Rhine River, Germany">
-                <button id="search-btn">FLY TO</button>
+            <div class="panel-section" id="intel-panel">
+                <h3>STAGE INTELLIGENCE</h3>
+                <h4 id="stage-title">No Stage Loaded</h4>
+                <p id="stage-summary">Awaiting campaign activation.</p>
+                <div class="unit-counters">
+                    <div class="stat-pill attacker">ATT: <span id="count-attacker">0</span></div>
+                    <div class="stat-pill defender">DEF: <span id="count-defender">0</span></div>
+                    <div class="stat-pill neutral">NEU: <span id="count-neutral">0</span></div>
+                </div>
+            </div>
         </div>
-    
-    <hr style="border: 1px solid #333; margin: 15px 0;">
-    
-    <div id="timeline-controls">
-        <h3>TIMELINE CHRONOLOGY</h3>
-        <p style="color: #888; font-style: italic;">No active campaign file loaded into command scope.</p>
-    </div>
-</div>
-    
-    <hr style="border: 1px solid #333; margin: 15px 0;">
-    
-    <div id="timeline-controls">
-        <h3>TIMELINE CHRONOLOGY</h3>
-        <p style="color: #888; font-style: italic;">No active campaign file loaded into command scope.</p>
-    </div>
-</div>
 
-        <div id="map-canvas"></div>
+        <!-- Live Canvas & Tactical Bottom Bar -->
+        <div id="map-wrapper">
+            <div id="map-canvas"></div>
+
+            <!-- Bottom Tactical Deck -->
+            <div id="playback-deck">
+                <div class="deck-info">
+                    <span class="deck-label">STAGE SCRUBBER</span>
+                    <span id="deck-stage-name">INITIALIZING</span>
+                </div>
+
+                <div class="slider-container">
+                    <input type="range" id="timeline-slider" min="0" max="0" value="0" step="1" disabled>
+                    <div class="slider-ticks" id="slider-ticks"></div>
+                </div>
+
+                <div class="deck-controls">
+                    <button id="prev-btn" title="Previous Stage">&#9664;&#9664;</button>
+                    <button id="play-btn" title="Auto Play / Pause">&#9654; PLAY</button>
+                    <button id="next-btn" title="Next Stage">&#9654;&#9654;</button>
+                    <div class="speed-selector">
+                        <label>SPEED:</label>
+                        <select id="playback-speed">
+                            <option value="3000">1x (3s)</option>
+                            <option value="1500" selected>2x (1.5s)</option>
+                            <option value="750">4x (0.75s)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" 
             integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" 
             crossorigin=""></script>
-            
     <script src="app.js"></script>
 </body>
 </html>

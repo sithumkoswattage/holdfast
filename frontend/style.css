@@ -3,61 +3,271 @@
     margin: 0;
     padding: 0;
 }
+
 body {
-    font-family: 'Courier New', Courier, monospace;
-    background-color: #1a1a1a;
-    color: #e0e0e0;
+    font-family: 'Consolas', 'Courier New', monospace;
+    background-color: #0b0d0e;
+    color: #c4d1c8;
     display: flex;
     flex-direction: column;
     height: 100vh;
+    overflow: hidden;
 }
+
 header {
-    background-color: #111;
-    padding: 15px;
-    border-bottom: 2px solid #333;
-    text-align: center;
+    background: linear-gradient(180deg, #131719 0%, #0d1011 100%);
+    padding: 12px 20px;
+    border-bottom: 1px solid #243029;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
 }
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    background-color: #38bdf8;
+    border-radius: 50%;
+    box-shadow: 0 0 8px #38bdf8;
+}
+
+header h2 {
+    font-size: 15px;
+    letter-spacing: 2px;
+    color: #e5ede7;
+}
+
+#op-state-banner {
+    font-size: 12px;
+    color: #5eead4;
+    letter-spacing: 1px;
+}
+
 #app-container {
     display: flex;
     flex: 1;
-    height: calc(100vh - 60px);
+    height: calc(100vh - 49px);
 }
+
 #sidebar {
-    width: 350px;
-    background-color: #222;
-    border-right: 2px solid #333;
-    padding: 20px;
+    width: 320px;
+    background-color: #0f1315;
+    border-right: 1px solid #1f2923;
+    padding: 16px;
     display: flex;
     flex-direction: column;
-    gap: 20px;
-    overflow-y: auto;
+    gap: 16px;
+    z-index: 1000;
 }
-#map-canvas {
-    flex: 1;
-    height: 100%;
-    background-color: #151515;
+
+.panel-section {
+    background: #141a1c;
+    border: 1px solid #232d27;
+    border-radius: 4px;
+    padding: 12px;
 }
+
+.panel-section h3 {
+    font-size: 11px;
+    letter-spacing: 1.5px;
+    color: #7a8f82;
+    margin-bottom: 8px;
+}
+
+#campaign-select, #location-input {
+    width: 100%;
+    padding: 8px;
+    background-color: #0a0d0e;
+    border: 1px solid #2f3e35;
+    color: #d1ded5;
+    border-radius: 3px;
+    font-family: inherit;
+    font-size: 12px;
+}
+
+button {
+    padding: 8px 12px;
+    background-color: #1e3328;
+    border: 1px solid #3d6650;
+    color: #7ce3a7;
+    cursor: pointer;
+    border-radius: 3px;
+    font-family: inherit;
+    font-size: 11px;
+    letter-spacing: 1px;
+    font-weight: bold;
+    transition: all 0.2s ease;
+}
+
+button:hover:not(:disabled) {
+    background-color: #2b4939;
+    border-color: #589574;
+    color: #aff5cc;
+}
+
+button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+#load-campaign-btn {
+    width: 100%;
+    margin-top: 8px;
+}
+
 .search-box {
     display: flex;
-    gap: 10px;
+    gap: 6px;
 }
-input[type="text"] {
+
+#stage-title {
+    color: #f1f7f3;
+    font-size: 13px;
+    margin: 4px 0 6px 0;
+}
+
+#stage-summary {
+    font-size: 11px;
+    line-height: 1.4;
+    color: #8c9e93;
+    max-height: 120px;
+    overflow-y: auto;
+}
+
+.unit-counters {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+}
+
+.stat-pill {
     flex: 1;
-    padding: 8px;
-    background-color: #333;
-    border: 1px solid #555;
-    color: #fff;
-    border-radius: 4px;
-}
-button {
-    padding: 8px 15px;
-    background-color: #4a5d4e;
-    border: none;
-    color: white;
-    cursor: pointer;
-    border-radius: 4px;
+    font-size: 10px;
+    padding: 4px;
+    text-align: center;
+    border-radius: 2px;
     font-weight: bold;
 }
-button:hover {
-    background-color: #5c7461;
+
+.stat-pill.attacker { background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid #7f1d1d; }
+.stat-pill.defender { background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid #075985; }
+.stat-pill.neutral { background: rgba(156, 163, 175, 0.15); color: #9ca3af; border: 1px solid #374151; }
+
+#map-wrapper {
+    flex: 1;
+    position: relative;
+    height: 100%;
+}
+
+#map-canvas {
+    width: 100%;
+    height: 100%;
+    background-color: #0b0d0e;
+}
+
+/* Tactical Scrubbing Deck */
+#playback-deck {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: calc(100% - 60px);
+    max-width: 900px;
+    background: rgba(15, 19, 21, 0.92);
+    border: 1px solid #2b3931;
+    border-radius: 6px;
+    padding: 12px 18px;
+    z-index: 1000;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+}
+
+.deck-info {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    margin-bottom: 6px;
+}
+
+.deck-label {
+    color: #64748b;
+    letter-spacing: 1px;
+}
+
+#deck-stage-name {
+    color: #4ade80;
+    font-weight: bold;
+}
+
+.slider-container {
+    position: relative;
+    margin-bottom: 8px;
+}
+
+#timeline-slider {
+    width: 100%;
+    accent-color: #22c55e;
+    cursor: pointer;
+}
+
+.deck-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.speed-selector {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    color: #94a3b8;
+}
+
+.speed-selector select {
+    background: #0a0d0e;
+    color: #cbd5e1;
+    border: 1px solid #334155;
+    padding: 4px 6px;
+    border-radius: 3px;
+    font-family: inherit;
+    font-size: 10px;
+}
+
+/* Custom Marker Styling */
+.tactical-marker {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: bold;
+    color: #fff;
+    border: 2px solid #fff;
+    box-shadow: 0 0 10px rgba(0,0,0,0.8);
+    transition: transform 0.2s;
+}
+
+.tactical-marker.attacker {
+    background: #dc2626;
+    border-color: #fca5a5;
+    box-shadow: 0 0 12px rgba(220, 38, 38, 0.7);
+}
+
+.tactical-marker.defender {
+    background: #0284c7;
+    border-color: #7dd3fc;
+    box-shadow: 0 0 12px rgba(2, 132, 199, 0.7);
+}
+
+.tactical-marker.neutral {
+    background: #475569;
+    border-color: #cbd5e1;
 }
