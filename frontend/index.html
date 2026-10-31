@@ -17,7 +17,9 @@
             <span class="status-dot"></span>
             <h2>HOLDFAST // THEATER COMMAND</h2>
         </div>
-        <div id="op-state-banner">THEATER: STANDBY</div>
+        <div class="header-right">
+            <button id="editor-toggle-btn" class="editor-btn">ENTER LOGGER MODE</button>
+        </div>
     </header>
 
     <div id="app-container">
@@ -31,22 +33,86 @@
                 <button id="load-campaign-btn">ENGAGE OPERATIONS</button>
             </div>
 
-            <div class="panel-section">
-                <h3>TARGET ACQUISITION</h3>
-                <div class="search-box">
-                    <input type="text" id="location-input" placeholder="e.g., Arnhem, Netherlands">
-                    <button id="search-btn">FLY TO</button>
+            <!-- Unit Waypoint Logger Panel -->
+            <div class="panel-section" id="editor-panel" style="display: none; border-color: #ca8a04;">
+                <h3 style="color: #facc15;">WAYPOINT LOGGER</h3>
+                
+                <label class="input-label">SELECT UNIT</label>
+                <select id="logger-unit-select">
+                    <option value="NEW">+ Register New Unit</option>
+                </select>
+
+                <!-- New Unit Fields (shown when + Register New Unit is selected) -->
+                <div id="new-unit-fields">
+                    <label class="input-label">UNIT DESIGNATION</label>
+                    <input type="text" id="new-unit-name" placeholder="e.g., 101st Airborne">
+
+                    <div style="display: flex; gap: 6px; margin-top: 6px;">
+                        <div style="flex: 1;">
+                            <label class="input-label">FACTION</label>
+                            <select id="new-unit-faction">
+                                <option value="Attacker">Attacker</option>
+                                <option value="Defender">Defender</option>
+                                <option value="Neutral">Neutral</option>
+                            </select>
+                        </div>
+                        <div style="flex: 1;">
+                            <label class="input-label">TYPE</label>
+                            <select id="new-unit-type">
+                                <option value="Airborne">Airborne</option>
+                                <option value="Infantry">Infantry</option>
+                                <option value="Armor">Armor</option>
+                                <option value="Artillery">Artillery</option>
+                                <option value="Headquarters">HQ</option>
+                            </select>
+                        </div>
+                    </div>
                 </div>
+
+                <hr style="border: 1px solid #232d27; margin: 12px 0;">
+
+                <h3 style="color: #facc15;">WAYPOINT DATA</h3>
+                <label class="input-label">DATE & TIME (HISTORICAL)</label>
+                <input type="datetime-local" id="waypoint-timestamp">
+
+                <div style="display: flex; gap: 6px; margin-top: 6px;">
+                    <div style="flex: 1;">
+                        <label class="input-label">STRENGTH</label>
+                        <input type="number" id="waypoint-strength" value="5000" min="0">
+                    </div>
+                    <div style="flex: 1;">
+                        <label class="input-label">AMMO</label>
+                        <select id="waypoint-ammo">
+                            <option value="Full">Full</option>
+                            <option value="Operational" selected>Operational</option>
+                            <option value="Critical">Critical</option>
+                            <option value="Depleted">Depleted</option>
+                        </select>
+                    </div>
+                </div>
+
+                <label class="input-label" style="margin-top: 6px;">HISTORICAL NOTES / ORDERS</label>
+                <textarea id="waypoint-notes" rows="3" placeholder="e.g., Securing bridge crossroad..."></textarea>
+
+                <div id="click-status" class="status-box">CLICK MAP TO SET LOCATION</div>
+
+                <button id="save-waypoint-btn" style="width: 100%; margin-top: 10px; background-color: #ca8a04; color: #000; border-color: #a16207;">RECORD WAYPOINT</button>
             </div>
 
             <div class="panel-section" id="intel-panel">
-                <h3>STAGE INTELLIGENCE</h3>
-                <h4 id="stage-title">No Stage Loaded</h4>
-                <p id="stage-summary">Awaiting campaign activation.</p>
-                <div class="unit-counters">
-                    <div class="stat-pill attacker">ATT: <span id="count-attacker">0</span></div>
-                    <div class="stat-pill defender">DEF: <span id="count-defender">0</span></div>
-                    <div class="stat-pill neutral">NEU: <span id="count-neutral">0</span></div>
+                <h3>THEATER INTEL</h3>
+                <h4 id="active-campaign-title">No Campaign Loaded</h4>
+                <p id="active-campaign-desc" style="font-size: 11px; color: #8c9e93; line-height: 1.4; margin-top: 4px;">Select an operational theater above to begin.</p>
+                <div class="unit-counters" style="margin-top: 10px;">
+                    <div class="stat-pill attacker">ACTIVE UNITS: <span id="total-units-count">0</span></div>
+                </div>
+            </div>
+
+            <div class="panel-section">
+                <h3>TARGET ACQUISITION</h3>
+                <div class="search-box">
+                    <input type="text" id="location-input" placeholder="e.g., Bastogne, Belgium">
+                    <button id="search-btn">FLY TO</button>
                 </div>
             </div>
         </div>
@@ -55,28 +121,29 @@
         <div id="map-wrapper">
             <div id="map-canvas"></div>
 
-            <!-- Bottom Tactical Deck -->
+            <!-- Bottom Chronological Deck -->
             <div id="playback-deck">
                 <div class="deck-info">
-                    <span class="deck-label">STAGE SCRUBBER</span>
-                    <span id="deck-stage-name">INITIALIZING</span>
+                    <span class="deck-label">TEMPORAL SCRUBBER</span>
+                    <span id="deck-timestamp">--:--:--</span>
                 </div>
 
                 <div class="slider-container">
-                    <input type="range" id="timeline-slider" min="0" max="0" value="0" step="1" disabled>
-                    <div class="slider-ticks" id="slider-ticks"></div>
+                    <input type="range" id="timeline-slider" min="0" max="1000" value="0" step="1" disabled>
                 </div>
 
                 <div class="deck-controls">
-                    <button id="prev-btn" title="Previous Stage">&#9664;&#9664;</button>
+                    <button id="prev-btn" title="Step Back">&#9664;&#9664;</button>
                     <button id="play-btn" title="Auto Play / Pause">&#9654; PLAY</button>
-                    <button id="next-btn" title="Next Stage">&#9654;&#9654;</button>
+                    <button id="next-btn" title="Step Forward">&#9654;&#9654;</button>
+                    
                     <div class="speed-selector">
-                        <label>SPEED:</label>
+                        <label>RATE:</label>
                         <select id="playback-speed">
-                            <option value="3000">1x (3s)</option>
-                            <option value="1500" selected>2x (1.5s)</option>
-                            <option value="750">4x (0.75s)</option>
+                            <option value="60000">1 Min / Sec</option>
+                            <option value="3600000">1 Hour / Sec</option>
+                            <option value="21600000" selected>6 Hours / Sec</option>
+                            <option value="86400000">1 Day / Sec</option>
                         </select>
                     </div>
                 </div>

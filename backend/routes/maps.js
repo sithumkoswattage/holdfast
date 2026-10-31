@@ -69,4 +69,21 @@ router.post('/:id/units/:unitId/waypoints', async (req, res) => {
     }
 });
 
+//Register a brand new unit
+router.post('/:id/units', async (req, res) => {
+    try {
+        const campaign = await CampaignMap.findById(req.params.id);
+        if (!campaign) {
+            return res.status(404).json({ success: false, message: 'Campaign not found' });
+        }
+
+        campaign.units.push(req.body);
+        await campaign.save();
+        res.status(201).json(campaign.units[campaign.units.length - 1]);
+    } catch (error) {
+        console.error('[API ERROR]: Failed to register unit:', error.message);
+        res.status(400).json({ success: false, error: error.message });
+    }
+});
+
 module.exports = router;
