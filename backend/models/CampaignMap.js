@@ -53,6 +53,10 @@ const StageSchema = new mongoose.Schema({
         type: Number,
         required: true
     },
+    timestamp: {
+        type: Date,
+        default: Date.now
+    },
     historicalSummary: {
         type: String,
         required: true,
