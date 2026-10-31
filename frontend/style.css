@@ -64,6 +64,27 @@ header h2 {
     flex-direction: column;
     gap: 16px;
     z-index: 1000;
+    /* Enable internal scrolling */
+    overflow-y: auto;
+    max-height: 100%;
+}
+
+/* Tactical Sleek Scrollbar */
+#sidebar::-webkit-scrollbar {
+    width: 6px;
+}
+
+#sidebar::-webkit-scrollbar-track {
+    background: #0a0d0e;
+}
+
+#sidebar::-webkit-scrollbar-thumb {
+    background: #232d27;
+    border-radius: 3px;
+}
+
+#sidebar::-webkit-scrollbar-thumb:hover {
+    background: #3d6650;
 }
 
 .panel-section {
@@ -270,4 +291,35 @@ button:disabled {
 .tactical-marker.neutral {
     background: #475569;
     border-color: #cbd5e1;
+}
+
+/* editor mode styling and crosshair */
+
+.header-right {
+    display: flex;
+    align-items: center;
+}
+
+.editor-btn {
+    background-color: #854d0e;
+    border-color: #ca8a04;
+    color: #fef08a;
+    font-size: 10px;
+}
+
+.editor-btn:hover {
+    background-color: #a16207;
+    border-color: #eab308;
+    color: #fef9c3;
+}
+
+.editor-btn.active {
+    background-color: #991b1b;
+    border-color: #ef4444;
+    color: #fee2e2;
+}
+
+/* Force crosshair when map container has editor class */
+#map-canvas.crosshair-active {
+    cursor: crosshair !important;
 }

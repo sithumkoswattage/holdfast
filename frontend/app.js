@@ -227,5 +227,157 @@ speedSelect.addEventListener('change', () => {
     }
 });
 
+// visual editor and transmitter
+let isEditorMode = false;
+let draftMarkers = [];
+
+const editorToggleBtn = document.getElementById('editor-toggle-btn');
+const editorPanel = document.getElementById('editor-panel');
+const intelPanel = document.getElementById('intel-panel');
+
+const draftCampTitle = document.getElementById('draft-camp-title');
+const draftCampDesc = document.getElementById('draft-camp-desc');
+const draftStageTitle = document.getElementById('draft-stage-title');
+const draftStageTime = document.getElementById('draft-stage-time');
+const draftStageSummary = document.getElementById('draft-stage-summary');
+const draftFaction = document.getElementById('draft-faction');
+const draftUnitLabel = document.getElementById('draft-unit-label');
+const saveDraftBtn = document.getElementById('save-draft-btn');
+
+// Toggle editor mode
+editorToggleBtn.addEventListener('click', () => {
+    isEditorMode = !isEditorMode;
+    
+    if (isEditorMode) {
+        editorToggleBtn.textContent = 'EXIT EDITOR MODE';
+        editorToggleBtn.classList.add('active');
+        editorPanel.style.display = 'block';
+        intelPanel.style.display = 'none';
+        document.getElementById('map-canvas').classList.add('crosshair-active');
+        stopPlayback();
+    } else {
+        editorToggleBtn.textContent = 'ENTER EDITOR MODE';
+        editorToggleBtn.classList.remove('active');
+        editorPanel.style.display = 'none';
+        intelPanel.style.display = 'block';
+        document.getElementById('map-canvas').classList.remove('crosshair-active');
+        
+        draftMarkers.forEach(d => map.removeLayer(d.layer));
+        draftMarkers = [];
+    }
+});
+
+// Drop units
+map.on('click', (e) => {
+    if (!isEditorMode) return;
+
+    const lat = e.latlng.lat;
+    const lng = e.latlng.lng;
+    const faction = draftFaction.value;
+    const label = draftUnitLabel.value.trim() || 'UNIT';
+    const factionClass = faction.toLowerCase();
+
+    const tacticalIcon = L.divIcon({
+        className: `tactical-marker ${factionClass}`,
+        html: `<span>${label.substring(0, 3).toUpperCase()}</span>`,
+        iconSize: [32, 24],
+        iconAnchor: [16, 12]
+    });
+
+    const marker = L.marker([lat, lng], { icon: tacticalIcon }).addTo(map);
+
+    draftMarkers.push({
+        layer: marker,
+        data: {
+            label: label,
+            location: { type: 'Point', coordinates: [lng, lat] },
+            faction: faction,
+            troopStrength: 1000,
+            ammoStatus: 'Full'
+        }
+    });
+
+    console.log(`[FORGE]: Unit ${label} staged at [${lng.toFixed(4)}, ${lat.toFixed(4)}]`);
+});
+
+// Transmit campaign
+saveDraftBtn.addEventListener('click', async () => {
+    const title = draftCampTitle.value.trim();
+    const description = draftCampDesc.value.trim() || 'No campaign summary specified.';
+    const stageTitleVal = draftStageTitle.value.trim();
+    const stageSummaryVal = draftStageSummary.value.trim() || 'Initial troop disposition.';
+    const stageTimeVal = draftStageTime.value ? new Date(draftStageTime.value) : new Date();
+
+    if (!title || !stageTitleVal) {
+        alert('Please provide both a Campaign Title and a Stage Title.');
+        return;
+    }
+
+    if (draftMarkers.length === 0) {
+        alert('Please click on the map to deploy at least one unit marker before transmitting.');
+        return;
+    }
+
+    // Auto-detect theater center from map
+    const mapCenter = map.getCenter();
+
+    const payload = {
+        title: title,
+        description: description,
+        centerLongitude: parseFloat(mapCenter.lng.toFixed(4)),
+        centerLatitude: parseFloat(mapCenter.lat.toFixed(4)),
+        defaultZoomLevel: map.getZoom(),
+        stages: [
+            {
+                title: stageTitleVal,
+                order: 1,
+                timestamp: stageTimeVal,
+                historicalSummary: stageSummaryVal,
+                troopMarkers: draftMarkers.map(m => m.data)
+            }
+        ]
+    };
+
+    try {
+        saveDraftBtn.disabled = true;
+        saveDraftBtn.textContent = 'TRANSMITTING...';
+
+        const res = await fetch(API_BASE_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+            alert(`Campaign "${title}" successfully recorded to database!`);
+
+            // Clear draft markers and form
+            draftMarkers.forEach(d => map.removeLayer(d.layer));
+            draftMarkers = [];
+            draftCampTitle.value = '';
+            draftCampDesc.value = '';
+            draftStageTitle.value = '';
+            draftStageSummary.value = '';
+
+            // Exit editor mode
+            editorToggleBtn.click();
+
+            // Refresh dropdown
+            campaignSelect.innerHTML = '<option value="">-- Select Active Campaign --</option>';
+            await loadCampaignDropdown();
+        } else {
+            alert(`Validation Failed: ${data.error || data.message}`);
+        }
+    } catch (err) {
+        console.error('[TRANSMIT ERROR]:', err);
+        alert('Network failure connecting to local server.');
+    } finally {
+        saveDraftBtn.disabled = false;
+        saveDraftBtn.textContent = 'TRANSMIT TO CLOUD';
+    }
+});
+
 // Initialize
 loadCampaignDropdown();

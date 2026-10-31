@@ -1,15 +1,16 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Holdfast // Tactical Command Engine</title>
-    
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" 
-          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" 
-          crossorigin=""/>
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
     <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
 
     <header>
@@ -18,6 +19,9 @@
             <h2>HOLDFAST // THEATER COMMAND</h2>
         </div>
         <div id="op-state-banner">THEATER: STANDBY</div>
+        <div class="header-right">
+            <button id="editor-toggle-btn" class="editor-btn">ENTER EDITOR MODE</button>
+        </div>
     </header>
 
     <div id="app-container">
@@ -29,6 +33,66 @@
                     <option value="">-- Select Active Campaign --</option>
                 </select>
                 <button id="load-campaign-btn">ENGAGE OPERATIONS</button>
+            </div>
+
+            <!-- The Forge Panel (Hidden by default) -->
+            <div class="panel-section" id="editor-panel" style="display: none; border-color: #ca8a04;">
+                <h3 style="color: #facc15;">CAMPAIGN FORGE</h3>
+
+                <label style="font-size: 10px; color: #888;">CAMPAIGN NAME</label>
+                <input type="text" id="draft-camp-title" placeholder="e.g., Operation Overlord"
+                    style="margin-bottom: 8px;">
+
+                <label style="font-size: 10px; color: #888;">CAMPAIGN SUMMARY</label>
+                <input type="text" id="draft-camp-desc" placeholder="e.g., Allied invasion of Normandy"
+                    style="margin-bottom: 12px;">
+
+                <hr style="border: 1px solid #232d27; margin: 10px 0;">
+
+                <h3 style="color: #facc15;">STAGE 1: TEMPORAL MATRIX</h3>
+
+                <label style="font-size: 10px; color: #888;">STAGE TITLE / OBJECTIVE</label>
+                <input type="text" id="draft-stage-title" placeholder="e.g., D-Day Landings"
+                    style="margin-bottom: 8px;">
+
+                <label style="font-size: 10px; color: #888;">TIMESTAMP (DATE & TIME)</label>
+                <input type="datetime-local" id="draft-stage-time"
+                    style="width: 100%; padding: 8px; background-color: #0a0d0e; border: 1px solid #2f3e35; color: #d1ded5; border-radius: 3px; font-family: inherit; font-size: 11px; margin-bottom: 8px;">
+
+                <label style="font-size: 10px; color: #888;">HISTORICAL INTEL SUMMARY</label>
+                <input type="text" id="draft-stage-summary"
+                    placeholder="e.g., Seaborne landings commenced at 06:30 hours" style="margin-bottom: 12px;">
+
+                <hr style="border: 1px solid #232d27; margin: 10px 0;">
+
+                <h3 style="color: #facc15;">UNIT DEPLOYMENT</h3>
+                <p style="font-size: 10px; color: #888; margin-bottom: 8px;">Click map to place unit at this timestamp.
+                </p>
+
+                <div style="display: flex; gap: 5px; margin-bottom: 10px;">
+                    <select id="draft-faction"
+                        style="flex: 1; padding: 6px; background: #0a0d0e; color: white; border: 1px solid #333;">
+                        <option value="Attacker">Attacker (Red)</option>
+                        <option value="Defender">Defender (Blue)</option>
+                        <option value="Neutral">Neutral (Gray)</option>
+                    </select>
+                    <input type="text" id="draft-unit-label" placeholder="Unit (e.g., 101st)" style="flex: 1;">
+                </div>
+
+                <button id="save-draft-btn"
+                    style="width: 100%; background-color: #ca8a04; color: #000; border-color: #a16207;">TRANSMIT TO
+                    CLOUD</button>
+            </div>
+
+            <div class="panel-section" id="intel-panel">
+                <h3>STAGE INTELLIGENCE</h3>
+                <h4 id="stage-title">No Stage Loaded</h4>
+                <p id="stage-summary">Awaiting campaign activation.</p>
+                <div class="unit-counters">
+                    <div class="stat-pill attacker">ATT: <span id="count-attacker">0</span></div>
+                    <div class="stat-pill defender">DEF: <span id="count-defender">0</span></div>
+                    <div class="stat-pill neutral">NEU: <span id="count-neutral">0</span></div>
+                </div>
             </div>
 
             <div class="panel-section">
@@ -84,9 +148,9 @@
         </div>
     </div>
 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" 
-            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" 
-            crossorigin=""></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <script src="app.js"></script>
 </body>
+
 </html>
