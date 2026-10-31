@@ -1,13 +1,10 @@
 const mongoose = require('mongoose');
 
-const MarkerSchema = new mongoose.Schema({
-    label: {
-        type: String,
-        required: true,
-        trim: true
+const WaypointSchema = new mongoose.Schema({
+    timestamp: {
+        type: Date,
+        required: [true, 'A historical timestamp is required for each waypoint']
     },
-    // GeoJSON stuff goes here
-    
     location: {
         type: {
             type: String,
@@ -15,15 +12,14 @@ const MarkerSchema = new mongoose.Schema({
             default: 'Point'
         },
         coordinates: {
-            type: [Number],
+            type: [Number], //[longitude, latitude] GeoJSON
             required: true
         }
     },
-
-    faction: {
+    notes: {
         type: String,
-        enum: ['Attacker', 'Defender', 'Neutral'],
-        default: 'Neutral'
+        trim: true,
+        default: ''
     },
     troopStrength: {
         type: Number,
@@ -33,33 +29,28 @@ const MarkerSchema = new mongoose.Schema({
     ammoStatus: {
         type: String,
         enum: ['Full', 'Operational', 'Critical', 'Depleted'],
-        default: 'Full'
-    },
-    description: {
-        type: String,
-        trim: true
+        default: 'Operational'
     }
-});
+}, { _id: true });
 
-MarkerSchema.index({ location: '2dsphere' });
-
-const StageSchema = new mongoose.Schema({
-    title: {
+const UnitSchema = new mongoose.Schema({
+    name: {
         type: String,
-        required: [true, 'Stage title is required'],
+        required: [true, 'Unit designation is required (e.g., 101st Airborne)'],
         trim: true
     },
-    order: {
-        type: Number,
-        required: true
-    },
-    historicalSummary: {
+    faction: {
         type: String,
-        required: true,
-        trim: true
+        enum: ['Attacker', 'Defender', 'Neutral'],
+        default: 'Neutral'
     },
-    troopMarkers: [MarkerSchema]
-});
+    unitType: {
+        type: String,
+        enum: ['Infantry', 'Armor', 'Airborne', 'Artillery', 'Naval', 'Headquarters'],
+        default: 'Infantry'
+    },
+    waypoints: [WaypointSchema]
+}, { _id: true });
 
 const CampaignMapSchema = new mongoose.Schema({
     title: {
@@ -87,9 +78,12 @@ const CampaignMapSchema = new mongoose.Schema({
     createdBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
-        required: false
+        required: false // optional until auth integration
     },
-    stages: [StageSchema]
+    units: [UnitSchema]
 }, { timestamps: true });
+
+// Indexing for geospatial queries
+CampaignMapSchema.index({ "units.waypoints.location": "2dsphere" });
 
 module.exports = mongoose.model('CampaignMap', CampaignMapSchema);
