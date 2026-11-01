@@ -1,3 +1,15 @@
+// --- AUTHENTICATION & ROUTE GUARD ---
+const token = localStorage.getItem('holdfast_token');
+if (!token) {
+    window.location.href = 'login.html';
+}
+
+const authHeaders = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${token}`
+};
+
+// --- MAP INITIALIZATION ---
 const map = L.map('map-canvas', { zoomControl: false }).setView([50.5, 5.5], 7);
 L.control.zoom({ position: 'topright' }).addTo(map);
 
@@ -6,9 +18,10 @@ L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_M
     attribution: 'Tiles &copy; Esri &mdash; Sources: Esri, USGS, TomTom'
 }).addTo(map);
 
+// --- GLOBAL STATE ---
 const API_BASE_URL = 'http://localhost:5000/api/maps';
 let currentCampaign = null;
-let activeMarkers = {}; // unitId -> Leaflet marker instance
+let activeMarkers = {}; 
 let isEditorMode = false;
 
 let minTimestamp = 0;
@@ -17,10 +30,11 @@ let currentTimestamp = 0;
 let playbackInterval = null;
 
 let selectedUnitId = null;
-let editingWaypointId = null; // null = creating new; string = editing existing
+let editingWaypointId = null; 
 let pendingWaypointCoord = null;
 let pendingPlacementMarker = null;
 
+// --- DOM TARGETS ---
 const campaignSelect = document.getElementById('campaign-select');
 const loadCampaignBtn = document.getElementById('load-campaign-btn');
 const activeCampaignTitle = document.getElementById('active-campaign-title');
@@ -81,9 +95,15 @@ searchBtn.addEventListener('click', async () => {
     }
 });
 
+// Data loading
 async function loadCampaignDropdown() {
     try {
-        const res = await fetch(API_BASE_URL);
+        const res = await fetch(API_BASE_URL, { headers: authHeaders });
+        if (res.status === 401) {
+            localStorage.removeItem('holdfast_token');
+            window.location.href = 'login.html';
+            return;
+        }
         const campaigns = await res.json();
         campaignSelect.innerHTML = '<option value="">-- Select Active Campaign --</option>';
         campaigns.forEach(c => {
@@ -106,14 +126,19 @@ loadCampaignBtn.addEventListener('click', async () => {
 
 async function hydrateCampaign(campaignId) {
     try {
-        const res = await fetch(`${API_BASE_URL}/${campaignId}`);
+        const res = await fetch(`${API_BASE_URL}/${campaignId}`, { headers: authHeaders });
+        if (res.status === 401) {
+            localStorage.removeItem('holdfast_token');
+            window.location.href = 'login.html';
+            return;
+        }
         currentCampaign = await res.json();
 
         activeCampaignTitle.textContent = currentCampaign.title;
         activeCampaignDesc.textContent = currentCampaign.description;
         totalUnitsCount.textContent = currentCampaign.units ? currentCampaign.units.length : 0;
 
-        // Calculate theatre boundary
+        // Auto-zoom 
         const bounds = [];
         if (currentCampaign.units) {
             currentCampaign.units.forEach(u => {
@@ -126,7 +151,6 @@ async function hydrateCampaign(campaignId) {
             });
         }
 
-        // auto zoom init
         if (bounds.length > 0) {
             map.fitBounds(bounds, {
                 padding: [60, 60],
@@ -181,6 +205,7 @@ function computeTemporalBounds() {
         deckTimestamp.textContent = 'NO WAYPOINTS RECORDED';
     }
 }
+
 
 function renderAtTime(timeMs) {
     if (!currentCampaign || !currentCampaign.units) return;
@@ -270,7 +295,6 @@ function renderAtTime(timeMs) {
     });
 }
 
-// playback
 timelineSlider.addEventListener('input', (e) => {
     stopPlayback();
     renderAtTime(parseInt(e.target.value, 10));
@@ -316,6 +340,7 @@ nextBtn.addEventListener('click', () => {
     renderAtTime(Math.min(maxTimestamp, currentTimestamp + jump));
 });
 
+// --- 5. KEYFRAMES & UNIT SYNC ENGINE ---
 function clearKeyframePips() {
     keyframePipsTrack.innerHTML = '';
     deckUnitTag.textContent = 'TEMPORAL SCRUBBER (ALL UNITS)';
@@ -332,13 +357,11 @@ function syncUnitKeyframesView(unitId) {
 
     deckUnitTag.textContent = `KEYFRAMES: ${unit.name.toUpperCase()}`;
     const sortedWaypoints = [...(unit.waypoints || [])].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-
     const totalRange = maxTimestamp - minTimestamp;
 
     sortedWaypoints.forEach((wp, index) => {
         const wpTime = new Date(wp.timestamp).getTime();
 
-        // 1. Interactive Timeline Pip
         if (totalRange > 0) {
             const pct = Math.min(100, Math.max(0, ((wpTime - minTimestamp) / totalRange) * 100));
             const pip = document.createElement('div');
@@ -355,7 +378,6 @@ function syncUnitKeyframesView(unitId) {
             keyframePipsTrack.appendChild(pip);
         }
 
-        // Sidebar Waypoint Item
         const item = document.createElement('div');
         item.className = 'waypoint-item';
         item.dataset.waypointId = wp._id;
@@ -408,7 +430,6 @@ function resetToNewWaypointMode() {
     formModeBanner.classList.remove('editing');
     saveWaypointBtn.textContent = 'RECORD WAYPOINT';
 
-    // Auto-set the date-time
     waypointTimestamp.value = toDatetimeLocalString(currentTimestamp || Date.now());
     waypointNotes.value = '';
     clearPendingPlacement();
@@ -485,7 +506,6 @@ editorToggleBtn.addEventListener('click', () => {
     }
 });
 
-// Map click coordinate capture
 map.on('click', (e) => {
     if (!isEditorMode) return;
     pendingWaypointCoord = [e.latlng.lng, e.latlng.lat];
@@ -544,19 +564,17 @@ saveWaypointBtn.addEventListener('click', async () => {
 
     try {
         if (editingWaypointId) {
-            // Update existing keyframe
             saveWaypointBtn.textContent = 'UPDATING...';
             const unitId = loggerUnitSelect.value;
             const res = await fetch(`${API_BASE_URL}/${currentCampaign._id}/units/${unitId}/waypoints/${editingWaypointId}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: authHeaders,
                 body: JSON.stringify(waypointPayload)
             });
 
             if (!res.ok) throw new Error('Failed to update keyframe');
             alert('Keyframe updated and chronologically sorted.');
         } else if (loggerUnitSelect.value === 'NEW') {
-            // Create unit + 1st waypoint
             saveWaypointBtn.textContent = 'TRANSMITTING...';
             const name = newUnitName.value.trim();
             if (!name) {
@@ -575,7 +593,7 @@ saveWaypointBtn.addEventListener('click', async () => {
 
             const res = await fetch(`${API_BASE_URL}/${currentCampaign._id}/units`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: authHeaders,
                 body: JSON.stringify(unitPayload)
             });
 
@@ -583,19 +601,17 @@ saveWaypointBtn.addEventListener('click', async () => {
             const createdUnit = await res.json();
             selectedUnitId = createdUnit._id;
         } else {
-            // Append waypoint from existing unit
             saveWaypointBtn.textContent = 'TRANSMITTING...';
             const unitId = loggerUnitSelect.value;
             const res = await fetch(`${API_BASE_URL}/${currentCampaign._id}/units/${unitId}/waypoints`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: authHeaders,
                 body: JSON.stringify(waypointPayload)
             });
 
             if (!res.ok) throw new Error('Failed to append waypoint');
         }
 
-        // Rehydrate campaign
         await hydrateCampaign(currentCampaign._id);
         resetToNewWaypointMode();
     } catch (err) {
@@ -607,5 +623,16 @@ saveWaypointBtn.addEventListener('click', async () => {
     }
 });
 
-// Initial boot
-loadCampaignDropdown();
+async function initializeTheater() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const campaignId = urlParams.get('campaignId');
+
+    await loadCampaignDropdown();
+
+    if (campaignId) {
+        campaignSelect.value = campaignId;
+        await hydrateCampaign(campaignId);
+    }
+}
+
+initializeTheater();

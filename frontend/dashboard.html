@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Holdfast // Operational Landing Hub</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        body {
+            height: auto;
+            min-height: 100vh;
+            overflow-y: auto;
+            background: #0b0d0e;
+        }
+
+        .hub-container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 30px 20px;
+        }
+
+        .hub-topbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #1f2923;
+            padding-bottom: 16px;
+            margin-bottom: 24px;
+        }
+
+        .hub-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 20px;
+            margin-top: 16px;
+        }
+
+        .campaign-card {
+            background: #111618;
+            border: 1px solid #232d27;
+            border-radius: 5px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            transition: border-color 0.2s, transform 0.15s;
+        }
+
+        .campaign-card:hover {
+            border-color: #38bdf8;
+            transform: translateY(-2px);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 10px;
+        }
+
+        .card-title {
+            color: #f1f5f9;
+            font-size: 14px;
+            font-weight: bold;
+            letter-spacing: 0.5px;
+        }
+
+        .card-desc {
+            font-size: 11px;
+            color: #8c9e93;
+            line-height: 1.5;
+            margin-bottom: 16px;
+            flex: 1;
+        }
+
+        .card-meta {
+            font-size: 10px;
+            color: #475569;
+            margin-bottom: 12px;
+        }
+
+        /* Modal styling */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(4px);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-box {
+            width: 440px;
+            background: #0f1315;
+            border: 1px solid #334d3f;
+            border-radius: 6px;
+            padding: 24px;
+            box-shadow: 0 16px 36px rgba(0, 0, 0, 0.9);
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="header-left">
+            <span class="status-dot"></span>
+            <h2>HOLDFAST // OPERATIONAL THEATER HUB</h2>
+        </div>
+        <div class="header-right" style="gap: 12px;">
+            <span id="user-display" style="font-size: 11px; color: #4ade80;">OPERATOR: --</span>
+            <button id="logout-btn" style="background: #2b1818; border-color: #ef4444; color: #fca5a5;">ABORT / LOGOUT</button>
+        </div>
+    </header>
+
+    <div class="hub-container">
+        <div class="hub-topbar">
+            <div>
+                <h3 style="color: #cbd5e1; font-size: 13px; letter-spacing: 1.5px;">ACTIVE COMMAND THEATERS</h3>
+                <p style="color: #64748b; font-size: 11px; margin-top: 3px;">Select an existing campaign to engage operations or initialize a new theater.</p>
+            </div>
+            <button id="open-modal-btn" style="background: #1e3a2b; border-color: #22c55e; color: #86efac;">+ INITIATE NEW CAMPAIGN</button>
+        </div>
+
+        <div id="campaign-grid" class="hub-grid">
+        </div>
+    </div>
+
+    <div id="campaign-modal" class="modal-overlay">
+        <div class="modal-box">
+            <h3 style="color: #facc15; font-size: 13px; letter-spacing: 1px; margin-bottom: 14px;">ESTABLISH THEATER PARAMETERS</h3>
+            
+            <form id="new-campaign-form">
+                <label class="input-label">CAMPAIGN TITLE</label>
+                <input type="text" id="camp-title" required placeholder="e.g., Ardennes Counteroffensive">
+
+                <label class="input-label" style="margin-top: 10px;">HISTORICAL OVERVIEW / SCOPE</label>
+                <textarea id="camp-desc" rows="3" required placeholder="Strategic objectives, date range, combat theater..."></textarea>
+
+                <div style="display: flex; gap: 8px; margin-top: 10px;">
+                    <div style="flex: 1;">
+                        <label class="input-label">CENTER LATITUDE</label>
+                        <input type="number" step="0.01" id="camp-lat" value="50.25" required>
+                    </div>
+                    <div style="flex: 1;">
+                        <label class="input-label">CENTER LONGITUDE</label>
+                        <input type="number" step="0.01" id="camp-lng" value="5.65" required>
+                    </div>
+                    <div style="width: 80px;">
+                        <label class="input-label">ZOOM</label>
+                        <input type="number" id="camp-zoom" value="8" min="3" max="18" required>
+                    </div>
+                </div>
+
+                <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px;">
+                    <button type="button" id="close-modal-btn" style="background: transparent; border-color: #475569; color: #94a3b8;">CANCEL</button>
+                    <button type="submit" style="background: #ca8a04; border-color: #eab308; color: #000;">CREATE THEATER</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const API_MAPS_URL = 'http://localhost:5000/api/maps';
+        const token = localStorage.getItem('holdfast_token');
+        const user = JSON.parse(localStorage.getItem('holdfast_user') || '{}');
+
+        // Route Guard
+        if (!token) {
+            window.location.href = 'login.html';
+        }
+
+        document.getElementById('user-display').textContent = `OPERATOR: ${user.username ? user.username.toUpperCase() : 'UNKNOWN'}`;
+
+        document.getElementById('logout-btn').addEventListener('click', () => {
+            localStorage.removeItem('holdfast_token');
+            localStorage.removeItem('holdfast_user');
+            window.location.href = 'login.html';
+        });
+
+        // Modal Controls
+        const modal = document.getElementById('campaign-modal');
+        document.getElementById('open-modal-btn').addEventListener('click', () => modal.style.display = 'flex');
+        document.getElementById('close-modal-btn').addEventListener('click', () => modal.style.display = 'none');
+
+        // Fetch User's Campaigns
+        async function fetchCampaigns() {
+            try {
+                const res = await fetch(API_MAPS_URL, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (res.status === 401) {
+                    localStorage.removeItem('holdfast_token');
+                    window.location.href = 'login.html';
+                    return;
+                }
+
+                const campaigns = await res.json();
+                const grid = document.getElementById('campaign-grid');
+                grid.innerHTML = '';
+
+                if (campaigns.length === 0) {
+                    grid.innerHTML = `
+                        <div style="grid-column: 1 / -1; padding: 40px; text-align: center; border: 1px dashed #232d27; color: #64748b;">
+                            No active theaters established. Click "+ INITIATE NEW CAMPAIGN" to begin research logging.
+                        </div>
+                    `;
+                    return;
+                }
+
+                campaigns.forEach(c => {
+                    const card = document.createElement('div');
+                    card.className = 'campaign-card';
+                    card.innerHTML = `
+                        <div>
+                            <div class="card-header">
+                                <span class="card-title">${c.title}</span>
+                            </div>
+                            <p class="card-desc">${c.description || 'No operational summary recorded.'}</p>
+                        </div>
+                        <div>
+                            <div class="card-meta">ESTABLISHED: ${new Date(c.createdAt).toLocaleDateString()}</div>
+                            <button onclick="launchTheater('${c._id}')" style="width: 100%;">RESUME COMMAND &#9654;</button>
+                        </div>
+                    `;
+                    grid.appendChild(card);
+                });
+            } catch (err) {
+                console.error('[HUB ERROR]:', err);
+            }
+        }
+
+        window.launchTheater = function(campaignId) {
+            window.location.href = `index.html?campaignId=${campaignId}`;
+        };
+
+        document.getElementById('new-campaign-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const payload = {
+                title: document.getElementById('camp-title').value.trim(),
+                description: document.getElementById('camp-desc').value.trim(),
+                centerLatitude: parseFloat(document.getElementById('camp-lat').value),
+                centerLongitude: parseFloat(document.getElementById('camp-lng').value),
+                defaultZoomLevel: parseInt(document.getElementById('camp-zoom').value, 10),
+                units: []
+            };
+
+            try {
+                const res = await fetch(API_MAPS_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await res.json();
+                if (res.ok) {
+                    window.location.href = `index.html?campaignId=${data._id}`;
+                } else {
+                    alert(`Failed to initialize campaign: ${data.error || data.message}`);
+                }
+            } catch (err) {
+                console.error('[CREATE ERROR]:', err);
+            }
+        });
+
+        fetchCampaigns();
+    </script>
+</body>
+</html>
