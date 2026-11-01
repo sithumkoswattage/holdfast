@@ -78,7 +78,7 @@ const CampaignMapSchema = new mongoose.Schema({
     createdBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
-        required: false // optional until auth integration
+        required: [true, "Campaign must be initialized by an authorized user"]
     },
     units: [UnitSchema]
 }, { timestamps: true });

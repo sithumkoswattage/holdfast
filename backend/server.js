@@ -1,33 +1,33 @@
+require('dotenv').config();
 const express = require('express');
-const cors = require('cors');
-const dotenv = require('dotenv');
 const mongoose = require('mongoose');
-
-const mapRoutes = require('./routes/maps');
-
-dotenv.config();
+const cors = require('cors');
 
 const app = express();
+app.use(cors());
+app.use(express.json());
 
-app.use(cors());       
-app.use(express.json()); 
-
-mongoose.connect(process.env.MONGO_URI)
-.then(() => console.log('[DATABASE CONNECTED]: Connected to Holdfast cloud database successfully!'))
-.catch((err) => {
-    console.error('[DATABASE ERROR]: Connection sequence failed!');
-    console.error(err);
-});
-
-app.use('/api/maps', mapRoutes);
+const authRoutes = require('./routes/auth');
+const mapRoutes = require('./routes/maps');
 
 app.get('/', (req, res) => {
     res.json({ message: "Welcome to Holdfast Backend Engine. Standing fast!" });
 });
 
+app.use('/api/auth', authRoutes);
+app.use('/api/maps', mapRoutes);
 
 const PORT = process.env.PORT || 5000;
+const MONGO_URI = process.env.MONGO_URI;
 
-app.listen(PORT, () => {
-    console.log(`[SERVER RUNNING]: Holdfast engine listening securely on port ${PORT}`);
-});
+mongoose.connect(MONGO_URI)
+    .then(() => {
+        console.log('[DATABASE CONNECTED]: Connected to Holdfast cloud database successfully!');
+        app.listen(PORT, () => {
+            console.log(`[SERVER ACTIVE]: Command node listening securely on port ${PORT}`);
+        });
+    })
+    .catch((err) => {
+        console.error('[DATABASE ERROR]: Connection refused:', err.message);
+        process.exit(1);
+    });

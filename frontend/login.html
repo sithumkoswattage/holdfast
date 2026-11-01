@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Holdfast // Terminal Authentication</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        body {
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: radial-gradient(circle at center, #141c18 0%, #080a0b 100%);
+        }
+
+        .auth-container {
+            width: 380px;
+            background: #0f1315;
+            border: 1px solid #232d27;
+            border-radius: 6px;
+            padding: 24px;
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.8);
+        }
+
+        .auth-tabs {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #1f2923;
+        }
+
+        .auth-tab {
+            flex: 1;
+            padding: 10px;
+            background: transparent;
+            border: none;
+            color: #64748b;
+            font-size: 11px;
+            cursor: pointer;
+            letter-spacing: 1.5px;
+            border-bottom: 2px solid transparent;
+        }
+
+        .auth-tab.active {
+            color: #4ade80;
+            border-bottom-color: #22c55e;
+            background: rgba(34, 197, 94, 0.04);
+        }
+
+        .auth-input-group {
+            margin-bottom: 14px;
+        }
+
+        .auth-error {
+            display: none;
+            background: rgba(220, 38, 38, 0.15);
+            border: 1px solid #dc2626;
+            color: #fca5a5;
+            padding: 8px;
+            font-size: 10px;
+            border-radius: 3px;
+            margin-bottom: 14px;
+            text-align: center;
+        }
+
+        .auth-submit-btn {
+            width: 100%;
+            padding: 10px;
+            margin-top: 6px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="auth-container">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+            <span class="status-dot"></span>
+            <span style="font-size: 12px; font-weight: bold; letter-spacing: 2px; color: #e5ede7;">HOLDFAST // AUTH GATE</span>
+        </div>
+
+        <div class="auth-tabs">
+            <button class="auth-tab active" id="tab-login">LOGIN</button>
+            <button class="auth-tab" id="tab-register">REGISTER</button>
+        </div>
+
+        <div id="auth-error" class="auth-error"></div>
+
+        <form id="auth-form">
+            <div class="auth-input-group" id="group-username" style="display: none;">
+                <label class="input-label">CODENAME / USERNAME</label>
+                <input type="text" id="auth-username" autocomplete="username">
+            </div>
+
+            <div class="auth-input-group" id="group-email">
+                <label class="input-label" id="label-identifier">USERNAME OR EMAIL</label>
+                <input type="text" id="auth-identifier" required autocomplete="email">
+            </div>
+
+            <div class="auth-input-group">
+                <label class="input-label">SECURITY KEY / PASSWORD</label>
+                <input type="password" id="auth-password" required autocomplete="current-password">
+            </div>
+
+            <button type="submit" id="auth-submit" class="auth-submit-btn">AUTHENTICATE</button>
+        </form>
+    </div>
+
+    <script>
+        const API_AUTH_URL = 'http://localhost:5000/api/auth';
+        let isLoginMode = true;
+
+        const tabLogin = document.getElementById('tab-login');
+        const tabRegister = document.getElementById('tab-register');
+        const groupUsername = document.getElementById('group-username');
+        const labelIdentifier = document.getElementById('label-identifier');
+        const authIdentifier = document.getElementById('auth-identifier');
+        const authUsername = document.getElementById('auth-username');
+        const authPassword = document.getElementById('auth-password');
+        const authSubmit = document.getElementById('auth-submit');
+        const authError = document.getElementById('auth-error');
+        const authForm = document.getElementById('auth-form');
+
+        if (localStorage.getItem('holdfast_token')) {
+            window.location.href = 'dashboard.html';
+        }
+
+        tabLogin.addEventListener('click', () => {
+            isLoginMode = true;
+            tabLogin.classList.add('active');
+            tabRegister.classList.remove('active');
+            groupUsername.style.display = 'none';
+            labelIdentifier.textContent = 'USERNAME OR EMAIL';
+            authSubmit.textContent = 'AUTHENTICATE';
+            hideError();
+        });
+
+        tabRegister.addEventListener('click', () => {
+            isLoginMode = false;
+            tabRegister.classList.add('active');
+            tabLogin.classList.remove('active');
+            groupUsername.style.display = 'block';
+            labelIdentifier.textContent = 'EMAIL ADDRESS';
+            authSubmit.textContent = 'INITIALIZE CREDENTIALS';
+            hideError();
+        });
+
+        function showError(msg) {
+            authError.textContent = msg;
+            authError.style.display = 'block';
+        }
+
+        function hideError() {
+            authError.style.display = 'none';
+        }
+
+        authForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            hideError();
+            authSubmit.disabled = true;
+
+            const endpoint = isLoginMode ? `${API_AUTH_URL}/login` : `${API_AUTH_URL}/register`;
+            const payload = isLoginMode 
+                ? { identifier: authIdentifier.value.trim(), password: authPassword.value }
+                : { username: authUsername.value.trim(), email: authIdentifier.value.trim(), password: authPassword.value };
+
+            try {
+                const res = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await res.json();
+
+                if (!res.ok) {
+                    showError(data.message || 'Authentication rejected.');
+                    authSubmit.disabled = false;
+                    return;
+                }
+
+                // Session credentials
+                localStorage.setItem('holdfast_token', data.token);
+                localStorage.setItem('holdfast_user', JSON.stringify(data.user));
+
+                window.location.href = 'dashboard.html';
+            } catch (err) {
+                console.error('[AUTH ERROR]:', err);
+                showError('Network failure connecting to authentication node.');
+                authSubmit.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
