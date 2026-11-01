@@ -273,19 +273,24 @@ button:disabled {
     font-size: 10px;
 }
 
-/* Tactical Markers */
 .tactical-marker {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
-    border-radius: 4px;
+    min-width: 36px;
+    width: auto;
+    height: 22px;
+    padding: 2px 7px;
+    border-radius: 3px;
     font-size: 10px;
-    font-weight: bold;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
     color: #fff;
-    border: 2px solid #fff;
-    box-shadow: 0 0 10px rgba(0,0,0,0.8);
-    /* Linear transition for real-time glide */
+    border: 1.5px solid #fff;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.85);
     transition: transform 0.1s linear, opacity 0.2s ease;
+    transform: translate(-50%, -50%);
 }
 
 .tactical-marker.attacker {

@@ -1,14 +1,11 @@
-// --- MAP INITIALIZATION ---
 const map = L.map('map-canvas', { zoomControl: false }).setView([50.5, 5.5], 7);
 L.control.zoom({ position: 'topright' }).addTo(map);
 
-// Esri Street Basemap (Full labels & zoom)
 L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
     maxZoom: 19,
     attribution: 'Tiles &copy; Esri &mdash; Sources: Esri, USGS, TomTom'
 }).addTo(map);
 
-// --- GLOBAL STATE ---
 const API_BASE_URL = 'http://localhost:5000/api/maps';
 let currentCampaign = null;
 let activeMarkers = {}; // unitId -> Leaflet marker instance
@@ -19,13 +16,11 @@ let maxTimestamp = 0;
 let currentTimestamp = 0;
 let playbackInterval = null;
 
-// Keyframe & Selection State
 let selectedUnitId = null;
 let editingWaypointId = null; // null = creating new; string = editing existing
 let pendingWaypointCoord = null;
 let pendingPlacementMarker = null;
 
-// --- DOM TARGETS ---
 const campaignSelect = document.getElementById('campaign-select');
 const loadCampaignBtn = document.getElementById('load-campaign-btn');
 const activeCampaignTitle = document.getElementById('active-campaign-title');
@@ -64,14 +59,12 @@ const saveWaypointBtn = document.getElementById('save-waypoint-btn');
 const locationInput = document.getElementById('location-input');
 const searchBtn = document.getElementById('search-btn');
 
-// --- HELPER: FORMAT DATE FOR DATETIME-LOCAL INPUT ---
 function toDatetimeLocalString(dateObj) {
     const d = new Date(dateObj);
     const pad = (n) => String(n).padStart(2, '0');
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-// --- 1. GEOCODING ---
 searchBtn.addEventListener('click', async () => {
     const query = locationInput.value.trim();
     if (!query) return;
@@ -88,7 +81,6 @@ searchBtn.addEventListener('click', async () => {
     }
 });
 
-// --- 2. CAMPAIGN DATA LOADING ---
 async function loadCampaignDropdown() {
     try {
         const res = await fetch(API_BASE_URL);
@@ -121,17 +113,39 @@ async function hydrateCampaign(campaignId) {
         activeCampaignDesc.textContent = currentCampaign.description;
         totalUnitsCount.textContent = currentCampaign.units ? currentCampaign.units.length : 0;
 
-        map.flyTo(
-            [currentCampaign.centerLatitude, currentCampaign.centerLongitude],
-            currentCampaign.defaultZoomLevel || 8,
-            { animate: true, duration: 1.5 }
-        );
+        // Calculate theatre boundary
+        const bounds = [];
+        if (currentCampaign.units) {
+            currentCampaign.units.forEach(u => {
+                if (u.waypoints) {
+                    u.waypoints.forEach(w => {
+                        const [lng, lat] = w.location.coordinates;
+                        bounds.push([lat, lng]);
+                    });
+                }
+            });
+        }
+
+        // auto zoom init
+        if (bounds.length > 0) {
+            map.fitBounds(bounds, {
+                padding: [60, 60],
+                maxZoom: 13,
+                animate: true,
+                duration: 1.5
+            });
+        } else {
+            map.flyTo(
+                [currentCampaign.centerLatitude, currentCampaign.centerLongitude],
+                currentCampaign.defaultZoomLevel || 8,
+                { animate: true, duration: 1.5 }
+            );
+        }
 
         populateUnitSelector();
         computeTemporalBounds();
         renderAtTime(minTimestamp);
 
-        // Refresh keyframe visual layer if a unit is active
         if (selectedUnitId && selectedUnitId !== 'NEW') {
             syncUnitKeyframesView(selectedUnitId);
         } else {
@@ -168,7 +182,6 @@ function computeTemporalBounds() {
     }
 }
 
-// --- 3. DYNAMIC INTERPOLATION ENGINE ---
 function renderAtTime(timeMs) {
     if (!currentCampaign || !currentCampaign.units) return;
 
@@ -245,9 +258,9 @@ function renderAtTime(timeMs) {
             const factionClass = (unit.faction || 'neutral').toLowerCase();
             const icon = L.divIcon({
                 className: `tactical-marker ${factionClass}`,
-                html: `<span>${unit.name.substring(0, 4).toUpperCase()}</span>`,
-                iconSize: [36, 24],
-                iconAnchor: [18, 12]
+                html: `<span>${unit.name.toUpperCase()}</span>`,
+                iconSize: null,
+                iconAnchor: null
             });
 
             const marker = L.marker([lat, lng], { icon: icon }).addTo(map);
