@@ -33,16 +33,16 @@
                 <button id="load-campaign-btn">ENGAGE OPERATIONS</button>
             </div>
 
-            <!-- Unit Waypoint Logger Panel -->
+            // waypoint logger panel
             <div class="panel-section" id="editor-panel" style="display: none; border-color: #ca8a04;">
-                <h3 style="color: #facc15;">WAYPOINT LOGGER</h3>
+                <h3 style="color: #facc15;">WAYPOINT LOGGER & KEYFRAMES</h3>
                 
                 <label class="input-label">SELECT UNIT</label>
                 <select id="logger-unit-select">
                     <option value="NEW">+ Register New Unit</option>
                 </select>
 
-                <!-- New Unit Fields (shown when + Register New Unit is selected) -->
+                <!-- New Unit Fields -->
                 <div id="new-unit-fields">
                     <label class="input-label">UNIT DESIGNATION</label>
                     <input type="text" id="new-unit-name" placeholder="e.g., 101st Airborne">
@@ -69,11 +69,21 @@
                     </div>
                 </div>
 
+                <!-- Unit Waypoint List / Keyframe Inspector -->
+                <div id="unit-ledger-section" style="display: none; margin-top: 10px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <label class="input-label" style="margin: 0;">LOGGED KEYFRAMES</label>
+                        <button id="new-waypoint-mode-btn" class="mini-btn">+ ADD NEW</button>
+                    </div>
+                    <div id="waypoint-list" class="waypoint-list"></div>
+                </div>
+
                 <hr style="border: 1px solid #232d27; margin: 12px 0;">
 
-                <h3 style="color: #facc15;">WAYPOINT DATA</h3>
+                <div id="form-mode-banner" class="form-mode-banner">MODE: NEW WAYPOINT</div>
+
                 <label class="input-label">DATE & TIME (HISTORICAL)</label>
-                <input type="datetime-local" id="waypoint-timestamp">
+                <input type="datetime-local" id="waypoint-timestamp" step="60">
 
                 <div style="display: flex; gap: 6px; margin-top: 6px;">
                     <div style="flex: 1;">
@@ -92,7 +102,7 @@
                 </div>
 
                 <label class="input-label" style="margin-top: 6px;">HISTORICAL NOTES / ORDERS</label>
-                <textarea id="waypoint-notes" rows="3" placeholder="e.g., Securing bridge crossroad..."></textarea>
+                <textarea id="waypoint-notes" rows="2" placeholder="e.g., Securing bridge crossroad..."></textarea>
 
                 <div id="click-status" class="status-box">CLICK MAP TO SET LOCATION</div>
 
@@ -121,14 +131,16 @@
         <div id="map-wrapper">
             <div id="map-canvas"></div>
 
-            <!-- Bottom Chronological Deck -->
+            // Bottom deck
             <div id="playback-deck">
                 <div class="deck-info">
-                    <span class="deck-label">TEMPORAL SCRUBBER</span>
+                    <span class="deck-label" id="deck-unit-tag">TEMPORAL SCRUBBER (ALL UNITS)</span>
                     <span id="deck-timestamp">--:--:--</span>
                 </div>
 
                 <div class="slider-container">
+                    <!-- Keyframe Pip Overlay Track -->
+                    <div id="keyframe-pips-track"></div>
                     <input type="range" id="timeline-slider" min="0" max="1000" value="0" step="1" disabled>
                 </div>
 

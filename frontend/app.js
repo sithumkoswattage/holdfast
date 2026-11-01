@@ -1,29 +1,31 @@
-// Map Initialization
-const map = L.map('map-canvas', {
-    zoomControl: false
-}).setView([50.5, 5.5], 7);
-
+// --- MAP INITIALIZATION ---
+const map = L.map('map-canvas', { zoomControl: false }).setView([50.5, 5.5], 7);
 L.control.zoom({ position: 'topright' }).addTo(map);
 
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+// Esri Street Basemap (Full labels & zoom)
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
     maxZoom: 19,
-    attribution: '&copy; OpenStreetMap contributors'
+    attribution: 'Tiles &copy; Esri &mdash; Sources: Esri, USGS, TomTom'
 }).addTo(map);
 
-// Global State
+// --- GLOBAL STATE ---
 const API_BASE_URL = 'http://localhost:5000/api/maps';
 let currentCampaign = null;
 let activeMarkers = {}; // unitId -> Leaflet marker instance
 let isEditorMode = false;
-let pendingWaypointCoord = null;
-let pendingPlacementMarker = null;
 
 let minTimestamp = 0;
 let maxTimestamp = 0;
 let currentTimestamp = 0;
 let playbackInterval = null;
 
-// DOM Targets
+// Keyframe & Selection State
+let selectedUnitId = null;
+let editingWaypointId = null; // null = creating new; string = editing existing
+let pendingWaypointCoord = null;
+let pendingPlacementMarker = null;
+
+// --- DOM TARGETS ---
 const campaignSelect = document.getElementById('campaign-select');
 const loadCampaignBtn = document.getElementById('load-campaign-btn');
 const activeCampaignTitle = document.getElementById('active-campaign-title');
@@ -32,6 +34,8 @@ const totalUnitsCount = document.getElementById('total-units-count');
 
 const timelineSlider = document.getElementById('timeline-slider');
 const deckTimestamp = document.getElementById('deck-timestamp');
+const deckUnitTag = document.getElementById('deck-unit-tag');
+const keyframePipsTrack = document.getElementById('keyframe-pips-track');
 const prevBtn = document.getElementById('prev-btn');
 const playBtn = document.getElementById('play-btn');
 const nextBtn = document.getElementById('next-btn');
@@ -42,6 +46,11 @@ const editorPanel = document.getElementById('editor-panel');
 const intelPanel = document.getElementById('intel-panel');
 const loggerUnitSelect = document.getElementById('logger-unit-select');
 const newUnitFields = document.getElementById('new-unit-fields');
+const unitLedgerSection = document.getElementById('unit-ledger-section');
+const waypointList = document.getElementById('waypoint-list');
+const newWaypointModeBtn = document.getElementById('new-waypoint-mode-btn');
+const formModeBanner = document.getElementById('form-mode-banner');
+
 const newUnitName = document.getElementById('new-unit-name');
 const newUnitFaction = document.getElementById('new-unit-faction');
 const newUnitType = document.getElementById('new-unit-type');
@@ -55,6 +64,13 @@ const saveWaypointBtn = document.getElementById('save-waypoint-btn');
 const locationInput = document.getElementById('location-input');
 const searchBtn = document.getElementById('search-btn');
 
+// --- HELPER: FORMAT DATE FOR DATETIME-LOCAL INPUT ---
+function toDatetimeLocalString(dateObj) {
+    const d = new Date(dateObj);
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 // --- 1. GEOCODING ---
 searchBtn.addEventListener('click', async () => {
     const query = locationInput.value.trim();
@@ -65,17 +81,14 @@ searchBtn.addEventListener('click', async () => {
         if (data.length > 0) {
             const { lat, lon, display_name } = data[0];
             map.flyTo([parseFloat(lat), parseFloat(lon)], 12, { animate: true, duration: 1.5 });
-            L.marker([parseFloat(lat), parseFloat(lon)])
-                .addTo(map)
-                .bindPopup(`<b>Anchor Target</b><br>${display_name}`)
-                .openPopup();
+            L.marker([parseFloat(lat), parseFloat(lon)]).addTo(map).bindPopup(`<b>Anchor:</b><br>${display_name}`).openPopup();
         }
     } catch (err) {
         console.error('[GEO ERROR]:', err);
     }
 });
 
-// --- 2. CAMPAIGN LOADING ---
+// --- 2. CAMPAIGN DATA LOADING ---
 async function loadCampaignDropdown() {
     try {
         const res = await fetch(API_BASE_URL);
@@ -111,14 +124,19 @@ async function hydrateCampaign(campaignId) {
         map.flyTo(
             [currentCampaign.centerLatitude, currentCampaign.centerLongitude],
             currentCampaign.defaultZoomLevel || 8,
-            { animate: true, duration: 1.8 }
+            { animate: true, duration: 1.5 }
         );
 
         populateUnitSelector();
         computeTemporalBounds();
-
-        // Render at initial timeline start
         renderAtTime(minTimestamp);
+
+        // Refresh keyframe visual layer if a unit is active
+        if (selectedUnitId && selectedUnitId !== 'NEW') {
+            syncUnitKeyframesView(selectedUnitId);
+        } else {
+            clearKeyframePips();
+        }
     } catch (err) {
         console.error('[HYDRATE ERROR]:', err);
     }
@@ -137,11 +155,7 @@ function computeTemporalBounds() {
     if (allTimes.length > 0) {
         minTimestamp = Math.min(...allTimes);
         maxTimestamp = Math.max(...allTimes);
-
-        // If all waypoints have the same timestamp, expand window by 1 day
-        if (minTimestamp === maxTimestamp) {
-            maxTimestamp += 86400000;
-        }
+        if (minTimestamp === maxTimestamp) maxTimestamp += 86400000;
 
         currentTimestamp = minTimestamp;
         timelineSlider.min = minTimestamp;
@@ -154,7 +168,7 @@ function computeTemporalBounds() {
     }
 }
 
-// --- 3. DYNAMIC INTERPOLATION & GLIDING ENGINE ---
+// --- 3. DYNAMIC INTERPOLATION ENGINE ---
 function renderAtTime(timeMs) {
     if (!currentCampaign || !currentCampaign.units) return;
 
@@ -165,12 +179,10 @@ function renderAtTime(timeMs) {
     currentCampaign.units.forEach(unit => {
         if (!unit.waypoints || unit.waypoints.length === 0) return;
 
-        // Sort waypoints chronologically
         const sorted = [...unit.waypoints].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
         const firstTime = new Date(sorted[0].timestamp).getTime();
         const lastTime = new Date(sorted[sorted.length - 1].timestamp).getTime();
 
-        // Case 1: Unit not yet deployed historically
         if (timeMs < firstTime) {
             if (activeMarkers[unit._id]) {
                 map.removeLayer(activeMarkers[unit._id]);
@@ -181,7 +193,6 @@ function renderAtTime(timeMs) {
 
         let lat, lng, activeNotes, activeStrength, activeAmmo;
 
-        // Case 2: Past its final logged waypoint (holds final position)
         if (timeMs >= lastTime) {
             const finalWp = sorted[sorted.length - 1];
             [lng, lat] = finalWp.location.coordinates;
@@ -189,7 +200,6 @@ function renderAtTime(timeMs) {
             activeStrength = finalWp.troopStrength;
             activeAmmo = finalWp.ammoStatus;
         } else {
-            // Case 3: Gliding between two recorded waypoints
             let prevWp = sorted[0];
             let nextWp = sorted[sorted.length - 1];
 
@@ -210,7 +220,6 @@ function renderAtTime(timeMs) {
             const [lngA, latA] = prevWp.location.coordinates;
             const [lngB, latB] = nextWp.location.coordinates;
 
-            // Linear interpolation of coordinate path
             lat = latA + alpha * (latB - latA);
             lng = lngA + alpha * (lngB - lngA);
 
@@ -223,18 +232,16 @@ function renderAtTime(timeMs) {
             <div style="font-family: monospace; font-size: 11px;">
                 <b style="color: #22c55e;">${unit.name}</b> [${unit.unitType}]<br>
                 <b>Faction:</b> ${unit.faction}<br>
-                <b>Est. Strength:</b> ${activeStrength.toLocaleString()}<br>
+                <b>Strength:</b> ${activeStrength.toLocaleString()}<br>
                 <b>Ammo:</b> ${activeAmmo}<br>
-                <p style="margin-top: 5px; color: #cbd5e1; font-style: italic;">"${activeNotes || 'Holding position.'}"</p>
+                <p style="margin-top: 5px; color: #cbd5e1; font-style: italic;">"${activeNotes || 'In transit.'}"</p>
             </div>
         `;
 
         if (activeMarkers[unit._id]) {
-            // Smoothly glide position
             activeMarkers[unit._id].setLatLng([lat, lng]);
             activeMarkers[unit._id].getPopup().setContent(popupHTML);
         } else {
-            // Spawn unique instance
             const factionClass = (unit.faction || 'neutral').toLowerCase();
             const icon = L.divIcon({
                 className: `tactical-marker ${factionClass}`,
@@ -250,36 +257,28 @@ function renderAtTime(timeMs) {
     });
 }
 
-// --- 4. PLAYBACK CONTROLS ---
+// playback
 timelineSlider.addEventListener('input', (e) => {
     stopPlayback();
     renderAtTime(parseInt(e.target.value, 10));
 });
 
 playBtn.addEventListener('click', () => {
-    if (playbackInterval) {
-        stopPlayback();
-    } else {
-        startPlayback();
-    }
+    if (playbackInterval) stopPlayback();
+    else startPlayback();
 });
 
 function startPlayback() {
     if (minTimestamp === maxTimestamp) return;
     playBtn.textContent = '⏸ PAUSE';
-
-    // 25 updates per second for smooth interpolation
     const fps = 25;
     const intervalMs = 1000 / fps;
 
     playbackInterval = setInterval(() => {
         const ratePerSecond = parseInt(playbackSpeed.value, 10);
         const timeIncrement = ratePerSecond / fps;
-
         let nextTime = currentTimestamp + timeIncrement;
-        if (nextTime > maxTimestamp) {
-            nextTime = minTimestamp; // Loop back
-        }
+        if (nextTime > maxTimestamp) nextTime = minTimestamp;
         renderAtTime(nextTime);
     }, intervalMs);
 }
@@ -304,37 +303,109 @@ nextBtn.addEventListener('click', () => {
     renderAtTime(Math.min(maxTimestamp, currentTimestamp + jump));
 });
 
-// --- 5. WAYPOINT LOGGER & EDITOR ---
-editorToggleBtn.addEventListener('click', () => {
-    if (!currentCampaign) {
-        alert('Please load a campaign before entering Logger Mode.');
-        return;
-    }
+function clearKeyframePips() {
+    keyframePipsTrack.innerHTML = '';
+    deckUnitTag.textContent = 'TEMPORAL SCRUBBER (ALL UNITS)';
+}
 
-    isEditorMode = !isEditorMode;
-    if (isEditorMode) {
-        editorToggleBtn.textContent = 'EXIT LOGGER MODE';
-        editorToggleBtn.classList.add('active');
-        editorPanel.style.display = 'block';
-        intelPanel.style.display = 'none';
-        document.getElementById('map-canvas').classList.add('crosshair-active');
-        stopPlayback();
-    } else {
-        editorToggleBtn.textContent = 'ENTER LOGGER MODE';
-        editorToggleBtn.classList.remove('active');
-        editorPanel.style.display = 'none';
-        intelPanel.style.display = 'block';
-        document.getElementById('map-canvas').classList.remove('crosshair-active');
-        clearPendingPlacement();
-    }
-});
+function syncUnitKeyframesView(unitId) {
+    clearKeyframePips();
+    waypointList.innerHTML = '';
 
-loggerUnitSelect.addEventListener('change', () => {
-    if (loggerUnitSelect.value === 'NEW') {
-        newUnitFields.style.display = 'block';
-    } else {
-        newUnitFields.style.display = 'none';
-    }
+    if (!currentCampaign || !unitId || unitId === 'NEW') return;
+
+    const unit = currentCampaign.units.find(u => u._id === unitId);
+    if (!unit) return;
+
+    deckUnitTag.textContent = `KEYFRAMES: ${unit.name.toUpperCase()}`;
+    const sortedWaypoints = [...(unit.waypoints || [])].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+    const totalRange = maxTimestamp - minTimestamp;
+
+    sortedWaypoints.forEach((wp, index) => {
+        const wpTime = new Date(wp.timestamp).getTime();
+
+        // 1. Interactive Timeline Pip
+        if (totalRange > 0) {
+            const pct = Math.min(100, Math.max(0, ((wpTime - minTimestamp) / totalRange) * 100));
+            const pip = document.createElement('div');
+            pip.className = 'keyframe-pip';
+            pip.style.left = `${pct}%`;
+            pip.title = `[Keyframe ${index + 1}] ${new Date(wp.timestamp).toISOString().substring(0, 16).replace('T', ' ')}`;
+            pip.dataset.waypointId = wp._id;
+
+            pip.addEventListener('click', (e) => {
+                e.stopPropagation();
+                selectAndInspectWaypoint(unit, wp);
+            });
+
+            keyframePipsTrack.appendChild(pip);
+        }
+
+        // Sidebar Waypoint Item
+        const item = document.createElement('div');
+        item.className = 'waypoint-item';
+        item.dataset.waypointId = wp._id;
+        item.innerHTML = `
+            <div>
+                <span class="waypoint-item-time">${new Date(wp.timestamp).toISOString().substring(5, 16).replace('T', ' ')}</span>
+                <div class="waypoint-item-notes">${wp.notes || 'No description'}</div>
+            </div>
+            <span style="color: #64748b; font-size: 9px;">#${index + 1}</span>
+        `;
+
+        item.addEventListener('click', () => {
+            selectAndInspectWaypoint(unit, wp);
+        });
+
+        waypointList.appendChild(item);
+    });
+}
+
+function selectAndInspectWaypoint(unit, waypoint) {
+    editingWaypointId = waypoint._id;
+
+    document.querySelectorAll('.keyframe-pip').forEach(p => {
+        p.classList.toggle('active', p.dataset.waypointId === waypoint._id);
+    });
+    document.querySelectorAll('.waypoint-item').forEach(i => {
+        i.classList.toggle('active', i.dataset.waypointId === waypoint._id);
+    });
+
+    waypointTimestamp.value = toDatetimeLocalString(waypoint.timestamp);
+    waypointStrength.value = waypoint.troopStrength;
+    waypointAmmo.value = waypoint.ammoStatus;
+    waypointNotes.value = waypoint.notes;
+
+    const [lng, lat] = waypoint.location.coordinates;
+    pendingWaypointCoord = [lng, lat];
+    updatePlacementMarker(lat, lng);
+
+    formModeBanner.textContent = `MODE: EDITING KEYFRAME`;
+    formModeBanner.classList.add('editing');
+    saveWaypointBtn.textContent = 'UPDATE KEYFRAME';
+
+    const timeMs = new Date(waypoint.timestamp).getTime();
+    renderAtTime(timeMs);
+}
+
+function resetToNewWaypointMode() {
+    editingWaypointId = null;
+    formModeBanner.textContent = 'MODE: NEW WAYPOINT';
+    formModeBanner.classList.remove('editing');
+    saveWaypointBtn.textContent = 'RECORD WAYPOINT';
+
+    // Auto-set the date-time
+    waypointTimestamp.value = toDatetimeLocalString(currentTimestamp || Date.now());
+    waypointNotes.value = '';
+    clearPendingPlacement();
+
+    document.querySelectorAll('.keyframe-pip').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.waypoint-item').forEach(i => i.classList.remove('active'));
+}
+
+newWaypointModeBtn.addEventListener('click', () => {
+    resetToNewWaypointMode();
 });
 
 function populateUnitSelector() {
@@ -347,27 +418,81 @@ function populateUnitSelector() {
             loggerUnitSelect.appendChild(opt);
         });
     }
-    newUnitFields.style.display = 'block';
+
+    if (selectedUnitId && selectedUnitId !== 'NEW') {
+        loggerUnitSelect.value = selectedUnitId;
+        newUnitFields.style.display = 'none';
+        unitLedgerSection.style.display = 'block';
+    } else {
+        loggerUnitSelect.value = 'NEW';
+        newUnitFields.style.display = 'block';
+        unitLedgerSection.style.display = 'none';
+    }
 }
 
+loggerUnitSelect.addEventListener('change', () => {
+    selectedUnitId = loggerUnitSelect.value;
+    if (selectedUnitId === 'NEW') {
+        newUnitFields.style.display = 'block';
+        unitLedgerSection.style.display = 'none';
+        clearKeyframePips();
+        resetToNewWaypointMode();
+    } else {
+        newUnitFields.style.display = 'none';
+        unitLedgerSection.style.display = 'block';
+        syncUnitKeyframesView(selectedUnitId);
+        resetToNewWaypointMode();
+    }
+});
+
+editorToggleBtn.addEventListener('click', () => {
+    if (!currentCampaign) {
+        alert('Please select and engage an operational campaign first.');
+        return;
+    }
+
+    isEditorMode = !isEditorMode;
+    if (isEditorMode) {
+        editorToggleBtn.textContent = 'EXIT LOGGER MODE';
+        editorToggleBtn.classList.add('active');
+        editorPanel.style.display = 'block';
+        intelPanel.style.display = 'none';
+        document.getElementById('map-canvas').classList.add('crosshair-active');
+        stopPlayback();
+        resetToNewWaypointMode();
+        if (selectedUnitId && selectedUnitId !== 'NEW') syncUnitKeyframesView(selectedUnitId);
+    } else {
+        editorToggleBtn.textContent = 'ENTER LOGGER MODE';
+        editorToggleBtn.classList.remove('active');
+        editorPanel.style.display = 'none';
+        intelPanel.style.display = 'block';
+        document.getElementById('map-canvas').classList.remove('crosshair-active');
+        clearPendingPlacement();
+        clearKeyframePips();
+    }
+});
+
+// Map click coordinate capture
 map.on('click', (e) => {
     if (!isEditorMode) return;
     pendingWaypointCoord = [e.latlng.lng, e.latlng.lat];
+    updatePlacementMarker(e.latlng.lat, e.latlng.lng);
+});
 
+function updatePlacementMarker(lat, lng) {
     if (pendingPlacementMarker) {
-        pendingPlacementMarker.setLatLng(e.latlng);
+        pendingPlacementMarker.setLatLng([lat, lng]);
     } else {
-        pendingPlacementMarker = L.circleMarker(e.latlng, {
+        pendingPlacementMarker = L.circleMarker([lat, lng], {
             radius: 8,
             color: '#facc15',
             fillColor: '#ca8a04',
-            fillOpacity: 0.8
+            fillOpacity: 0.85
         }).addTo(map);
     }
-
-    clickStatus.textContent = `TARGET LOCKED: [${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)}]`;
+    clickStatus.textContent = `TARGET LOCKED: [${lat.toFixed(4)}, ${lng.toFixed(4)}]`;
     clickStatus.classList.add('active');
-});
+}
 
 function clearPendingPlacement() {
     if (pendingPlacementMarker) {
@@ -381,13 +506,13 @@ function clearPendingPlacement() {
 
 saveWaypointBtn.addEventListener('click', async () => {
     if (!pendingWaypointCoord) {
-        alert('Please click on the map to set the waypoint GPS coordinates.');
+        alert('Click the tactical map canvas to lock waypoint coordinates.');
         return;
     }
 
     const timestampVal = waypointTimestamp.value;
     if (!timestampVal) {
-        alert('Please select a valid historical Date & Time.');
+        alert('Specify a valid Date & Time.');
         return;
     }
 
@@ -403,13 +528,26 @@ saveWaypointBtn.addEventListener('click', async () => {
     };
 
     saveWaypointBtn.disabled = true;
-    saveWaypointBtn.textContent = 'TRANSMITTING...';
 
     try {
-        if (loggerUnitSelect.value === 'NEW') {
+        if (editingWaypointId) {
+            // Update existing keyframe
+            saveWaypointBtn.textContent = 'UPDATING...';
+            const unitId = loggerUnitSelect.value;
+            const res = await fetch(`${API_BASE_URL}/${currentCampaign._id}/units/${unitId}/waypoints/${editingWaypointId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(waypointPayload)
+            });
+
+            if (!res.ok) throw new Error('Failed to update keyframe');
+            alert('Keyframe updated and chronologically sorted.');
+        } else if (loggerUnitSelect.value === 'NEW') {
+            // Create unit + 1st waypoint
+            saveWaypointBtn.textContent = 'TRANSMITTING...';
             const name = newUnitName.value.trim();
             if (!name) {
-                alert('Please enter a Unit Designation (e.g. 101st Airborne).');
+                alert('Enter a Unit Designation.');
                 saveWaypointBtn.disabled = false;
                 saveWaypointBtn.textContent = 'RECORD WAYPOINT';
                 return;
@@ -429,7 +567,11 @@ saveWaypointBtn.addEventListener('click', async () => {
             });
 
             if (!res.ok) throw new Error('Failed to create new unit');
+            const createdUnit = await res.json();
+            selectedUnitId = createdUnit._id;
         } else {
+            // Append waypoint from existing unit
+            saveWaypointBtn.textContent = 'TRANSMITTING...';
             const unitId = loggerUnitSelect.value;
             const res = await fetch(`${API_BASE_URL}/${currentCampaign._id}/units/${unitId}/waypoints`, {
                 method: 'POST',
@@ -440,20 +582,17 @@ saveWaypointBtn.addEventListener('click', async () => {
             if (!res.ok) throw new Error('Failed to append waypoint');
         }
 
-        alert('Waypoint successfully recorded to historical ledger.');
-        clearPendingPlacement();
-        waypointNotes.value = '';
-
-        // Rehydrate campaign so the new waypoint is immediately loaded
+        // Rehydrate campaign
         await hydrateCampaign(currentCampaign._id);
+        resetToNewWaypointMode();
     } catch (err) {
-        console.error('[LOGGER ERROR]:', err);
-        alert('Transmission failed. Check server console.');
+        console.error('[TRANSMIT ERROR]:', err);
+        alert('Operation failed. Check server log.');
     } finally {
         saveWaypointBtn.disabled = false;
-        saveWaypointBtn.textContent = 'RECORD WAYPOINT';
+        if (!editingWaypointId) saveWaypointBtn.textContent = 'RECORD WAYPOINT';
     }
 });
 
-// Boot
+// Initial boot
 loadCampaignDropdown();

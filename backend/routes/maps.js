@@ -86,4 +86,40 @@ router.post('/:id/units', async (req, res) => {
     }
 });
 
+// PUT Update & re-sort waypoint
+router.put('/:id/units/:unitId/waypoints/:waypointId', async (req, res) => {
+    try {
+        const campaign = await CampaignMap.findById(req.params.id);
+        if (!campaign) {
+            return res.status(404).json({ success: false, message: 'Campaign not found' });
+        }
+
+        const unit = campaign.units.id(req.params.unitId);
+        if (!unit) {
+            return res.status(404).json({ success: false, message: 'Unit not found' });
+        }
+
+        const waypoint = unit.waypoints.id(req.params.waypointId);
+        if (!waypoint) {
+            return res.status(404).json({ success: false, message: 'Waypoint not found' });
+        }
+
+        // Apply updates
+        if (req.body.timestamp) waypoint.timestamp = new Date(req.body.timestamp);
+        if (req.body.location) waypoint.location = req.body.location;
+        if (req.body.notes !== undefined) waypoint.notes = req.body.notes;
+        if (req.body.troopStrength !== undefined) waypoint.troopStrength = req.body.troopStrength;
+        if (req.body.ammoStatus) waypoint.ammoStatus = req.body.ammoStatus;
+
+        // Force chronological order
+        unit.waypoints.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+        await campaign.save();
+        res.status(200).json({ success: true, unit });
+    } catch (error) {
+        console.error('[API ERROR]: Failed to update waypoint:', error.message);
+        res.status(400).json({ success: false, error: error.message });
+    }
+});
+
 module.exports = router;
